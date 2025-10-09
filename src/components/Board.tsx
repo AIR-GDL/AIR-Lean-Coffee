@@ -1,0 +1,447 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { DndContext, DragEndEvent, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { Topic, User, TimerSettings, ColumnType } from '@/types';
+import { useLocalStorage } from '@/hooks/useLocalStorage';
+import Column from './Column';
+import TopicCard from './TopicCard';
+import Timer from './Timer';
+import Modal from './Modal';
+import confetti from 'canvas-confetti';
+import { Clock, LogOut } from 'lucide-react';
+
+interface BoardProps {
+  user: User;
+  onLogout: () => void;
+}
+
+export default function Board({ user: initialUser, onLogout }: BoardProps) {
+  const [topics, setTopics] = useLocalStorage<Topic[]>('lean-coffee-topics', []);
+  const [user, setUser] = useLocalStorage<User>('lean-coffee-user', initialUser);
+  const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
+    durationMinutes: 5,
+    isRunning: false,
+    startTime: null,
+    remainingSeconds: null,
+    currentTopicId: null,
+  });
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [showAddTopicModal, setShowAddTopicModal] = useState(false);
+  const [showConfirmDiscussModal, setShowConfirmDiscussModal] = useState(false);
+  const [showVotingModal, setShowVotingModal] = useState(false);
+  const [pendingTopicMove, setPendingTopicMove] = useState<{ topicId: string } | null>(null);
+  const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
+  
+  const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [newTopicDescription, setNewTopicDescription] = useState('');
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  // Update user in state when initialUser changes
+  useEffect(() => {
+    setUser(initialUser);
+  }, [initialUser, setUser]);
+
+  const getTopicsByColumn = (columnId: ColumnType) => {
+    return topics.filter(topic => topic.columnId === columnId);
+  };
+
+  const handleAddTopic = () => {
+    if (!newTopicTitle.trim()) return;
+
+    const newTopic: Topic = {
+      id: Date.now().toString(),
+      title: newTopicTitle.trim(),
+      description: newTopicDescription.trim() || undefined,
+      votes: 0,
+      createdAt: Date.now(),
+      columnId: 'toDiscuss',
+      votedBy: [],
+    };
+
+    setTopics([...topics, newTopic]);
+    setNewTopicTitle('');
+    setNewTopicDescription('');
+    setShowAddTopicModal(false);
+  };
+
+  const handleVote = (topicId: string) => {
+    const topic = topics.find(t => t.id === topicId);
+    if (!topic || user.votesRemaining <= 0 || topic.votedBy.includes(user.email)) {
+      return;
+    }
+
+    setTopics(topics.map(t => 
+      t.id === topicId 
+        ? { ...t, votes: t.votes + 1, votedBy: [...t.votedBy, user.email] }
+        : t
+    ));
+
+    setUser({
+      ...user,
+      votesRemaining: user.votesRemaining - 1,
+      votedTopics: [...user.votedTopics, topicId],
+    });
+  };
+
+  const handleDragStart = (event: DragEndEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const topicId = active.id as string;
+    const targetColumnId = over.id as ColumnType;
+    const topic = topics.find(t => t.id === topicId);
+
+    if (!topic || topic.columnId === targetColumnId) return;
+
+    // Only allow moving to "Discussing" from "Top Voted" section
+    if (targetColumnId === 'discussing') {
+      if (topic.columnId === 'toDiscuss' && topic.votes > 0) {
+        setPendingTopicMove({ topicId });
+        setShowConfirmDiscussModal(true);
+      }
+      return;
+    }
+
+    // Prevent moving to other columns inappropriately
+    if (targetColumnId === 'toDiscuss' || targetColumnId === 'discussed' || targetColumnId === 'actions') {
+      return;
+    }
+
+    setTopics(topics.map(t =>
+      t.id === topicId ? { ...t, columnId: targetColumnId } : t
+    ));
+  };
+
+  const handleConfirmDiscuss = () => {
+    if (!pendingTopicMove) return;
+
+    const { topicId } = pendingTopicMove;
+    
+    setTopics(topics.map(t =>
+      t.id === topicId ? { ...t, columnId: 'discussing' } : t
+    ));
+
+    // Start timer
+    setTimerSettings({
+      ...timerSettings,
+      isRunning: true,
+      startTime: Date.now(),
+      remainingSeconds: timerSettings.durationMinutes * 60,
+      currentTopicId: topicId,
+    });
+
+    setShowConfirmDiscussModal(false);
+    setPendingTopicMove(null);
+  };
+
+  const handleTimerComplete = () => {
+    setShowVotingModal(true);
+    setUserVote(null);
+  };
+
+  const handleVoteSubmit = (vote: 'finish' | 'continue') => {
+    setUserVote(vote);
+    
+    // In a real app, this would collect votes from all users
+    // For now, we'll simulate immediate action
+    setTimeout(() => {
+      if (vote === 'finish') {
+        // Move topic to discussed
+        const currentTopicId = timerSettings.currentTopicId;
+        if (currentTopicId) {
+          setTopics(topics.map(t =>
+            t.id === currentTopicId ? { ...t, columnId: 'discussed' } : t
+          ));
+
+          // Trigger confetti
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+          });
+        }
+
+        // Reset timer
+        setTimerSettings({
+          ...timerSettings,
+          isRunning: false,
+          startTime: null,
+          remainingSeconds: null,
+          currentTopicId: null,
+        });
+      } else {
+        // Continue discussion - reset timer
+        setTimerSettings({
+          ...timerSettings,
+          startTime: Date.now(),
+          remainingSeconds: timerSettings.durationMinutes * 60,
+        });
+      }
+
+      setShowVotingModal(false);
+      setUserVote(null);
+    }, 500);
+  };
+
+  const handleLogout = () => {
+    if (confirm('Are you sure you want to logout? Your data will be preserved.')) {
+      onLogout();
+    }
+  };
+
+  const activeTopic = activeId ? topics.find(t => t.id === activeId) : null;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Lean Coffee Board</h1>
+              <p className="text-sm text-gray-600 mt-1">Welcome, {user.name}</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Votes Remaining</p>
+                <p className="text-2xl font-bold text-purple-600">{user.votesRemaining}/3</p>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <LogOut size={20} />
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Timer Display */}
+      {timerSettings.isRunning && timerSettings.remainingSeconds !== null && (
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <Timer
+            remainingSeconds={timerSettings.remainingSeconds}
+            onTimeUp={handleTimerComplete}
+          />
+        </div>
+      )}
+
+      {/* Board */}
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[calc(100vh-250px)]">
+            <Column
+              id="toDiscuss"
+              title="To Discuss"
+              topics={getTopicsByColumn('toDiscuss')}
+              user={user}
+              onVote={handleVote}
+              onAddTopic={() => setShowAddTopicModal(true)}
+            />
+
+            <Column
+              id="discussing"
+              title="Discussing"
+              topics={getTopicsByColumn('discussing')}
+              user={user}
+              onVote={handleVote}
+            />
+
+            <Column
+              id="discussed"
+              title="Discussed"
+              topics={getTopicsByColumn('discussed')}
+              user={user}
+              onVote={handleVote}
+            />
+
+            <Column
+              id="actions"
+              title="Settings"
+              topics={[]}
+              user={user}
+              onVote={handleVote}
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                    <Clock size={16} />
+                    Discussion Duration
+                  </label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="20"
+                    value={timerSettings.durationMinutes}
+                    onChange={(e) => setTimerSettings({ ...timerSettings, durationMinutes: parseInt(e.target.value) })}
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                    disabled={timerSettings.isRunning}
+                  />
+                  <div className="flex justify-between text-xs text-gray-600 mt-1">
+                    <span>1 min</span>
+                    <span className="font-bold text-purple-600">{timerSettings.durationMinutes} min</span>
+                    <span>20 min</span>
+                  </div>
+                </div>
+              </div>
+            </Column>
+          </div>
+
+          <DragOverlay>
+            {activeTopic ? (
+              <TopicCard
+                topic={activeTopic}
+                user={user}
+                onVote={() => {}}
+                canVote={false}
+                isDraggable={false}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </main>
+
+      {/* Add Topic Modal */}
+      <Modal
+        isOpen={showAddTopicModal}
+        onClose={() => setShowAddTopicModal(false)}
+        title="Add New Topic"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Topic Title *
+            </label>
+            <input
+              type="text"
+              value={newTopicTitle}
+              onChange={(e) => setNewTopicTitle(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="Enter topic title"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description (optional)
+            </label>
+            <textarea
+              value={newTopicDescription}
+              onChange={(e) => setNewTopicDescription(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              placeholder="Add more details..."
+              rows={3}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => setShowAddTopicModal(false)}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddTopic}
+              disabled={!newTopicTitle.trim()}
+              className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+            >
+              Add Topic
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirm Discuss Modal */}
+      <Modal
+        isOpen={showConfirmDiscussModal}
+        onClose={() => {
+          setShowConfirmDiscussModal(false);
+          setPendingTopicMove(null);
+        }}
+        title="Start Discussion?"
+      >
+        <p className="mb-6">Are you sure you want to start discussing this topic?</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setShowConfirmDiscussModal(false);
+              setPendingTopicMove(null);
+            }}
+            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleConfirmDiscuss}
+            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+          >
+            Confirm
+          </button>
+        </div>
+      </Modal>
+
+      {/* Voting Modal */}
+      <Modal
+        isOpen={showVotingModal}
+        onClose={() => {}}
+        title="Time's Up! Vote on Next Action"
+        showCloseButton={false}
+      >
+        <p className="mb-6">Should we finish this topic or continue the discussion?</p>
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={() => handleVoteSubmit('finish')}
+            disabled={userVote !== null}
+            className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
+              userVote === 'finish'
+                ? 'bg-green-600 text-white'
+                : 'bg-green-100 text-green-700 hover:bg-green-600 hover:text-white'
+            } disabled:cursor-not-allowed`}
+          >
+            {userVote === 'finish' ? '✓ Voted to ' : ''}Finish Topic
+          </button>
+          <button
+            onClick={() => handleVoteSubmit('continue')}
+            disabled={userVote !== null}
+            className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
+              userVote === 'continue'
+                ? 'bg-blue-600 text-white'
+                : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
+            } disabled:cursor-not-allowed`}
+          >
+            {userVote === 'continue' ? '✓ Voted to ' : ''}Continue Discussion
+          </button>
+        </div>
+        {userVote && (
+          <p className="text-sm text-gray-600 text-center mt-4">
+            Waiting for results...
+          </p>
+        )}
+      </Modal>
+    </div>
+  );
+}
