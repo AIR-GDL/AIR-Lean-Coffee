@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { Topic, User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { useTopics } from '@/hooks/useTopics';
+import { createTopic, updateTopic } from '@/lib/api';
 import Column from './Column';
 import TopicCard from './TopicCard';
 import Timer from './Timer';
@@ -16,9 +18,29 @@ interface BoardProps {
   onLogout: () => void;
 }
 
+// Helper function to map DB status to column ID
+const statusToColumnId = (status: string): ColumnType => {
+  const mapping: Record<string, ColumnType> = {
+    'to-discuss': 'toDiscuss',
+    'discussing': 'discussing',
+    'discussed': 'discussed',
+  };
+  return mapping[status] || 'toDiscuss';
+};
+
+// Helper function to map column ID to DB status
+const columnIdToStatus = (columnId: ColumnType): 'to-discuss' | 'discussing' | 'discussed' => {
+  const mapping: Record<string, 'to-discuss' | 'discussing' | 'discussed'> = {
+    toDiscuss: 'to-discuss',
+    discussing: 'discussing',
+    discussed: 'discussed',
+  };
+  return mapping[columnId] || 'to-discuss';
+};
+
 export default function Board({ user: initialUser, onLogout }: BoardProps) {
-  const [topics, setTopics] = useLocalStorage<Topic[]>('lean-coffee-topics', []);
-  const [user, setUser] = useLocalStorage<User>('lean-coffee-user', initialUser);
+  const { topics, isLoading, mutate } = useTopics();
+  const [user, setUser] = useState<User>(initialUser);
   const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
     durationMinutes: 5,
     isRunning: false,
@@ -34,8 +56,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [pendingTopicMove, setPendingTopicMove] = useState<{ topicId: string } | null>(null);
   const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
   
-  const [newTopicTitle, setNewTopicTitle] = useState('');
-  const [newTopicDescription, setNewTopicDescription] = useState('');
+  const [newTopicContent, setNewTopicContent] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -48,48 +70,56 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   // Update user in state when initialUser changes
   useEffect(() => {
     setUser(initialUser);
-  }, [initialUser, setUser]);
+  }, [initialUser]);
 
   const getTopicsByColumn = (columnId: ColumnType) => {
-    return topics.filter(topic => topic.columnId === columnId);
+    const dbStatus = columnIdToStatus(columnId);
+    return topics.filter(topic => topic.status === dbStatus);
   };
 
-  const handleAddTopic = () => {
-    if (!newTopicTitle.trim()) return;
+  const handleAddTopic = async () => {
+    if (!newTopicContent.trim() || isSubmitting) return;
 
-    const newTopic: Topic = {
-      id: Date.now().toString(),
-      title: newTopicTitle.trim(),
-      description: newTopicDescription.trim() || undefined,
-      votes: 0,
-      createdAt: Date.now(),
-      columnId: 'toDiscuss',
-      votedBy: [],
-    };
-
-    setTopics([...topics, newTopic]);
-    setNewTopicTitle('');
-    setNewTopicDescription('');
-    setShowAddTopicModal(false);
+    setIsSubmitting(true);
+    try {
+      await createTopic({
+        content: newTopicContent.trim(),
+        author: user.name,
+      });
+      
+      await mutate(); // Refresh topics
+      setNewTopicContent('');
+      setShowAddTopicModal(false);
+    } catch (error) {
+      console.error('Failed to create topic:', error);
+      alert('Failed to create topic. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleVote = (topicId: string) => {
-    const topic = topics.find(t => t.id === topicId);
-    if (!topic || user.votesRemaining <= 0 || topic.votedBy.includes(user.email)) {
+  const handleVote = async (topicId: string) => {
+    if (user.votesRemaining <= 0) {
+      alert('No votes remaining!');
       return;
     }
 
-    setTopics(topics.map(t => 
-      t.id === topicId 
-        ? { ...t, votes: t.votes + 1, votedBy: [...t.votedBy, user.email] }
-        : t
-    ));
+    try {
+      const response = await updateTopic(topicId, {
+        action: 'VOTE',
+        userEmail: user.email,
+      });
 
-    setUser({
-      ...user,
-      votesRemaining: user.votesRemaining - 1,
-      votedTopics: [...user.votedTopics, topicId],
-    });
+      // Update local user state with new votes remaining
+      if ('user' in response) {
+        setUser(response.user);
+      }
+
+      await mutate(); // Refresh topics
+    } catch (error: any) {
+      console.error('Failed to vote:', error);
+      alert(error.message || 'Failed to vote. Please try again.');
+    }
   };
 
   const handleDragStart = (event: DragEndEvent) => {
@@ -104,13 +134,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
     const topicId = active.id as string;
     const targetColumnId = over.id as ColumnType;
-    const topic = topics.find(t => t.id === topicId);
+    const topic = topics.find(t => t._id === topicId);
 
-    if (!topic || topic.columnId === targetColumnId) return;
+    if (!topic || statusToColumnId(topic.status) === targetColumnId) return;
 
     // Only allow moving to "Discussing" from "Top Voted" section
     if (targetColumnId === 'discussing') {
-      if (topic.columnId === 'toDiscuss' && topic.votes > 0) {
+      if (topic.status === 'to-discuss' && topic.votes > 0) {
         setPendingTopicMove({ topicId });
         setShowConfirmDiscussModal(true);
       }
@@ -121,32 +151,34 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (targetColumnId === 'toDiscuss' || targetColumnId === 'discussed' || targetColumnId === 'actions') {
       return;
     }
-
-    setTopics(topics.map(t =>
-      t.id === topicId ? { ...t, columnId: targetColumnId } : t
-    ));
   };
 
-  const handleConfirmDiscuss = () => {
+  const handleConfirmDiscuss = async () => {
     if (!pendingTopicMove) return;
 
     const { topicId } = pendingTopicMove;
     
-    setTopics(topics.map(t =>
-      t.id === topicId ? { ...t, columnId: 'discussing' } : t
-    ));
+    try {
+      await updateTopic(topicId, {
+        status: 'discussing',
+      });
 
-    // Start timer
-    setTimerSettings({
-      ...timerSettings,
-      isRunning: true,
-      startTime: Date.now(),
-      remainingSeconds: timerSettings.durationMinutes * 60,
-      currentTopicId: topicId,
-    });
+      // Start timer
+      setTimerSettings({
+        ...timerSettings,
+        isRunning: true,
+        startTime: Date.now(),
+        remainingSeconds: timerSettings.durationMinutes * 60,
+        currentTopicId: topicId,
+      });
 
-    setShowConfirmDiscussModal(false);
-    setPendingTopicMove(null);
+      await mutate(); // Refresh topics
+      setShowConfirmDiscussModal(false);
+      setPendingTopicMove(null);
+    } catch (error) {
+      console.error('Failed to update topic status:', error);
+      alert('Failed to start discussion. Please try again.');
+    }
   };
 
   const handleTimerComplete = () => {
@@ -154,26 +186,32 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     setUserVote(null);
   };
 
-  const handleVoteSubmit = (vote: 'finish' | 'continue') => {
+  const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
     setUserVote(vote);
     
     // In a real app, this would collect votes from all users
     // For now, we'll simulate immediate action
-    setTimeout(() => {
+    setTimeout(async () => {
       if (vote === 'finish') {
         // Move topic to discussed
         const currentTopicId = timerSettings.currentTopicId;
         if (currentTopicId) {
-          setTopics(topics.map(t =>
-            t.id === currentTopicId ? { ...t, columnId: 'discussed' } : t
-          ));
+          try {
+            await updateTopic(currentTopicId, {
+              status: 'discussed',
+            });
 
-          // Trigger confetti
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-          });
+            // Trigger confetti
+            confetti({
+              particleCount: 100,
+              spread: 70,
+              origin: { y: 0.6 },
+            });
+
+            await mutate(); // Refresh topics
+          } catch (error) {
+            console.error('Failed to finish topic:', error);
+          }
         }
 
         // Reset timer
@@ -199,12 +237,20 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleLogout = () => {
-    if (confirm('Are you sure you want to logout? Your data will be preserved.')) {
+    if (confirm('Are you sure you want to logout?')) {
       onLogout();
     }
   };
 
-  const activeTopic = activeId ? topics.find(t => t.id === activeId) : null;
+  const activeTopic = activeId ? topics.find(t => t._id === activeId) : null;
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+        <div className="text-2xl font-semibold text-gray-700">Loading board...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
@@ -332,28 +378,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Topic Title *
-            </label>
-            <input
-              type="text"
-              value={newTopicTitle}
-              onChange={(e) => setNewTopicTitle(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              placeholder="Enter topic title"
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description (optional)
+              Discussion Topic *
             </label>
             <textarea
-              value={newTopicDescription}
-              onChange={(e) => setNewTopicDescription(e.target.value)}
+              value={newTopicContent}
+              onChange={(e) => setNewTopicContent(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-              placeholder="Add more details..."
-              rows={3}
+              placeholder="What would you like to discuss?"
+              autoFocus
+              rows={4}
             />
           </div>
 
@@ -361,15 +394,16 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             <button
               onClick={() => setShowAddTopicModal(false)}
               className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               onClick={handleAddTopic}
-              disabled={!newTopicTitle.trim()}
+              disabled={!newTopicContent.trim() || isSubmitting}
               className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
             >
-              Add Topic
+              {isSubmitting ? 'Adding...' : 'Add Topic'}
             </button>
           </div>
         </div>

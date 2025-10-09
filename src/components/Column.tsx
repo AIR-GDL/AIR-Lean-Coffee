@@ -55,11 +55,11 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, ch
                 <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-3">
                   Top Voted
                 </div>
-                <SortableContext items={topVotedTopics.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext items={topVotedTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
                   <div className="space-y-3">
                     {topVotedTopics.map((topic) => (
                       <TopicCard
-                        key={topic.id}
+                        key={topic._id}
                         topic={topic}
                         user={user}
                         onVote={onVote}
@@ -76,11 +76,11 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, ch
                 <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
                   New Topics
                 </div>
-                <SortableContext items={newTopics.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                <SortableContext items={newTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
                   <div className="space-y-3">
                     {newTopics.map((topic) => (
                       <TopicCard
-                        key={topic.id}
+                        key={topic._id}
                         topic={topic}
                         user={user}
                         onVote={onVote}
@@ -100,11 +100,11 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, ch
           </>
         ) : (
           <>
-            <SortableContext items={regularTopics.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={regularTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-3">
                 {regularTopics.map((topic) => (
                   <TopicCard
-                    key={topic.id}
+                    key={topic._id}
                     topic={topic}
                     user={user}
                     onVote={onVote}

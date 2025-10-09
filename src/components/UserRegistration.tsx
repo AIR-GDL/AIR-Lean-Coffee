@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { User } from '@/types';
+import { createOrGetUser } from '@/lib/api';
 
 interface UserRegistrationProps {
   onRegister: (user: User) => void;
@@ -11,6 +12,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState({ name: '', email: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validateForm = () => {
     const newErrors = { name: '', email: '' };
@@ -33,17 +35,23 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (validateForm()) {
-      const user: User = {
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        votesRemaining: 3,
-        votedTopics: [],
-      };
-      onRegister(user);
+      setIsSubmitting(true);
+      try {
+        const user = await createOrGetUser({
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+        });
+        onRegister(user);
+      } catch (error) {
+        console.error('Registration error:', error);
+        setErrors({ ...errors, email: 'Failed to register. Please try again.' });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -100,9 +108,10 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
 
           <button
             type="submit"
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-105"
+            disabled={isSubmitting}
+            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none"
           >
-            Get Started
+            {isSubmitting ? 'Registering...' : 'Get Started'}
           </button>
         </form>
       </div>

@@ -1,21 +1,23 @@
+// API response types from MongoDB
 export interface User {
+  _id: string;
   name: string;
   email: string;
   votesRemaining: number;
-  votedTopics: string[]; // Array of topic IDs
+  createdAt: string;
 }
-
-export type ColumnType = 'toDiscuss' | 'discussing' | 'discussed' | 'actions';
 
 export interface Topic {
-  id: string;
-  title: string;
-  description?: string;
+  _id: string;
+  content: string;
+  author: string;
   votes: number;
-  createdAt: number;
-  columnId: ColumnType;
-  votedBy: string[]; // Array of user emails who voted for this topic
+  status: 'to-discuss' | 'discussing' | 'discussed';
+  createdAt: string;
 }
+
+// Client-side types
+export type ColumnType = 'toDiscuss' | 'discussing' | 'discussed' | 'actions';
 
 export interface TimerSettings {
   durationMinutes: number;
@@ -28,4 +30,21 @@ export interface TimerSettings {
 export interface VoteResult {
   finishTopic: number;
   continueDiscussion: number;
+}
+
+// API request/response types
+export interface CreateUserRequest {
+  name: string;
+  email: string;
+}
+
+export interface CreateTopicRequest {
+  content: string;
+  author: string;
+}
+
+export interface UpdateTopicRequest {
+  action?: 'VOTE';
+  userEmail?: string;
+  status?: 'to-discuss' | 'discussing' | 'discussed';
 }

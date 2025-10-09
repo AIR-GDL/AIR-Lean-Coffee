@@ -21,7 +21,7 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: topic.id, disabled: !isDraggable });
+  } = useSortable({ id: topic._id, disabled: !isDraggable });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -29,12 +29,10 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const hasUserVoted = topic.votedBy.includes(user.email);
-
   const handleVoteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (canVote && !hasUserVoted) {
-      onVote(topic.id);
+    if (canVote) {
+      onVote(topic._id);
     }
   };
 
@@ -51,33 +49,29 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">
-            {topic.title}
+            {topic.content}
           </h3>
-          {topic.description && (
-            <p className="text-sm text-gray-600 line-clamp-2">
-              {topic.description}
-            </p>
-          )}
+          <p className="text-xs text-gray-500 mt-1">
+            by {topic.author}
+          </p>
         </div>
         
-        {topic.columnId === 'toDiscuss' && (
+        {topic.status === 'to-discuss' && (
           <button
             onClick={handleVoteClick}
-            disabled={!canVote || hasUserVoted}
+            disabled={!canVote}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-full font-semibold text-sm transition-all ${
-              hasUserVoted
-                ? 'bg-purple-100 text-purple-700'
-                : canVote
+              canVote
                 ? 'bg-gray-100 text-gray-700 hover:bg-purple-600 hover:text-white'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-purple-100 text-purple-700 cursor-not-allowed'
             }`}
           >
-            <ThumbsUp size={16} className={hasUserVoted ? 'fill-current' : ''} />
+            <ThumbsUp size={16} />
             <span>{topic.votes}</span>
           </button>
         )}
         
-        {topic.columnId !== 'toDiscuss' && topic.votes > 0 && (
+        {topic.status !== 'to-discuss' && topic.votes > 0 && (
           <div className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-sm">
             <ThumbsUp size={16} />
             <span>{topic.votes}</span>
