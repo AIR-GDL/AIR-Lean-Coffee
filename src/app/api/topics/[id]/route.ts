@@ -5,12 +5,12 @@ import User from '@/models/User';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
-    const { id } = params;
+    const { id } = await params;
     const body = await request.json();
 
     // Check if this is a vote action
@@ -41,12 +41,8 @@ export async function PUT(
         );
       }
 
-      // Increment topic votes
-      const topic = await Topic.findByIdAndUpdate(
-        id,
-        { $inc: { votes: 1 } },
-        { new: true }
-      );
+      // Find topic and check if user already voted
+      const topic = await Topic.findById(id);
 
       if (!topic) {
         return NextResponse.json(
@@ -54,6 +50,19 @@ export async function PUT(
           { status: 404 }
         );
       }
+
+      // Check if user already voted on this topic
+      if (topic.votedBy.includes(userEmail.toLowerCase())) {
+        return NextResponse.json(
+          { error: 'You have already voted on this topic' },
+          { status: 400 }
+        );
+      }
+
+      // Increment topic votes and add user to votedBy array
+      topic.votes += 1;
+      topic.votedBy.push(userEmail.toLowerCase());
+      await topic.save();
 
       // Decrement user's remaining votes
       user.votesRemaining -= 1;
@@ -73,11 +82,7 @@ export async function PUT(
         );
       }
 
-      const topic = await Topic.findByIdAndUpdate(
-        id,
-        { status },
-        { new: true }
-      );
+      const topic = await Topic.findById(id);
 
       if (!topic) {
         return NextResponse.json(
@@ -85,6 +90,24 @@ export async function PUT(
           { status: 404 }
         );
       }
+
+      // If changing to 'discussed', return votes to users and set discussedAt
+      if (status === 'discussed' && topic.status !== 'discussed') {
+        // Return votes to all users who voted on this topic
+        if (topic.votedBy && topic.votedBy.length > 0) {
+          await User.updateMany(
+            { email: { $in: topic.votedBy } },
+            { $inc: { votesRemaining: 1 } }
+          );
+        }
+
+        // Set discussedAt timestamp
+        topic.discussedAt = new Date();
+      }
+
+      // Update status
+      topic.status = status;
+      await topic.save();
 
       return NextResponse.json(topic, { status: 200 });
     }
@@ -115,12 +138,12 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await connectDB();
     
-    const { id } = params;
+    const { id } = await params;
     
     const topic = await Topic.findByIdAndDelete(id);
 

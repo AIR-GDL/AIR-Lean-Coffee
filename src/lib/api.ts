@@ -70,3 +70,31 @@ export async function deleteTopic(id: string): Promise<void> {
     throw new Error(error.error || 'Failed to delete topic');
   }
 }
+
+// Fetch all users
+export async function fetchAllUsers(): Promise<User[]> {
+  const response = await fetch('/api/users/all', {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch users');
+  }
+
+  return response.json();
+}
+
+// Fetch discussion history
+export async function fetchDiscussionHistory(): Promise<Topic[]> {
+  const response = await fetch('/api/topics/history', {
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch history');
+  }
+
+  return response.json();
+}

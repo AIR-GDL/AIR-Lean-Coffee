@@ -5,13 +5,15 @@ import { DndContext, DragEndEvent, DragOverlay, closestCorners, PointerSensor, u
 import { Topic, User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
-import { createTopic, updateTopic } from '@/lib/api';
+import { useUsers } from '@/hooks/useUsers';
+import { createTopic, updateTopic, fetchAllUsers } from '@/lib/api';
 import Column from './Column';
 import TopicCard from './TopicCard';
 import Timer from './Timer';
 import Modal from './Modal';
 import confetti from 'canvas-confetti';
-import { Clock, LogOut } from 'lucide-react';
+import { Clock, LogOut, History, Users, StopCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 interface BoardProps {
   user: User;
@@ -39,7 +41,9 @@ const columnIdToStatus = (columnId: ColumnType): 'to-discuss' | 'discussing' | '
 };
 
 export default function Board({ user: initialUser, onLogout }: BoardProps) {
+  const router = useRouter();
   const { topics, isLoading, mutate } = useTopics();
+  const { users, mutate: mutateUsers } = useUsers();
   const [user, setUser] = useState<User>(initialUser);
   const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
     durationMinutes: 5,
@@ -71,6 +75,18 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   useEffect(() => {
     setUser(initialUser);
   }, [initialUser]);
+
+  // Update current user when users list changes (vote returns)
+  useEffect(() => {
+    if (user && users.length > 0) {
+      const updatedUser = users.find(u => u.email === user.email);
+      if (updatedUser && updatedUser.votesRemaining !== user.votesRemaining) {
+        setUser(updatedUser);
+        // Also update sessionStorage
+        sessionStorage.setItem('lean-coffee-user', JSON.stringify(updatedUser));
+      }
+    }
+  }, [users]);
 
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
@@ -209,6 +225,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             });
 
             await mutate(); // Refresh topics
+            await mutateUsers(); // Refresh users to update vote counts
           } catch (error) {
             console.error('Failed to finish topic:', error);
           }
@@ -223,17 +240,29 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           currentTopicId: null,
         });
       } else {
-        // Continue discussion - reset timer
+        // Continue discussion - reset timer (BUG FIX)
         setTimerSettings({
           ...timerSettings,
-          startTime: Date.now(),
-          remainingSeconds: timerSettings.durationMinutes * 60,
+          isRunning: true, // Keep running
+          startTime: Date.now(), // New start time
+          remainingSeconds: timerSettings.durationMinutes * 60, // Reset to duration
         });
       }
 
       setShowVotingModal(false);
       setUserVote(null);
     }, 500);
+  };
+
+  const handleFinishEarly = () => {
+    // Trigger the same voting modal as when timer completes
+    setShowVotingModal(true);
+    setUserVote(null);
+    // Pause the timer
+    setTimerSettings({
+      ...timerSettings,
+      isRunning: false,
+    });
   };
 
   const handleLogout = () => {
@@ -246,14 +275,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center">
         <div className="text-2xl font-semibold text-gray-700">Loading board...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -265,7 +294,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             <div className="flex items-center gap-4">
               <div className="text-right">
                 <p className="text-sm text-gray-600">Votes Remaining</p>
-                <p className="text-2xl font-bold text-purple-600">{user.votesRemaining}/3</p>
+                <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
               </div>
               <button
                 onClick={handleLogout}
@@ -282,10 +311,22 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       {/* Timer Display */}
       {timerSettings.isRunning && timerSettings.remainingSeconds !== null && (
         <div className="max-w-7xl mx-auto px-4 py-6">
-          <Timer
-            remainingSeconds={timerSettings.remainingSeconds}
-            onTimeUp={handleTimerComplete}
-          />
+          <div className="space-y-4">
+            <Timer
+              remainingSeconds={timerSettings.remainingSeconds}
+              onTimeUp={handleTimerComplete}
+            />
+            <div className="flex justify-center">
+              <button
+                onClick={handleFinishEarly}
+                className="flex items-center gap-2 px-6 py-3 bg-white border-2 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition shadow-md"
+                style={{ borderColor: '#005596' }}
+              >
+                <StopCircle size={20} style={{ color: '#005596' }} />
+                Finish Early
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -305,6 +346,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               user={user}
               onVote={handleVote}
               onAddTopic={() => setShowAddTopicModal(true)}
+              onUpdate={() => mutate()}
             />
 
             <Column
@@ -313,6 +355,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               topics={getTopicsByColumn('discussing')}
               user={user}
               onVote={handleVote}
+              onUpdate={() => mutate()}
             />
 
             <Column
@@ -321,16 +364,18 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               topics={getTopicsByColumn('discussed')}
               user={user}
               onVote={handleVote}
+              onUpdate={() => mutate()}
             />
 
             <Column
               id="actions"
-              title="Settings"
+              title="Controls & Info"
               topics={[]}
               user={user}
               onVote={handleVote}
             >
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {/* Discussion Duration */}
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                     <Clock size={16} />
@@ -342,15 +387,47 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     max="20"
                     value={timerSettings.durationMinutes}
                     onChange={(e) => setTimerSettings({ ...timerSettings, durationMinutes: parseInt(e.target.value) })}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    style={{ accentColor: '#005596' }}
                     disabled={timerSettings.isRunning}
                   />
                   <div className="flex justify-between text-xs text-gray-600 mt-1">
                     <span>1 min</span>
-                    <span className="font-bold text-purple-600">{timerSettings.durationMinutes} min</span>
+                    <span className="font-bold" style={{ color: '#005596' }}>{timerSettings.durationMinutes} min</span>
                     <span>20 min</span>
                   </div>
                 </div>
+
+                {/* Participants */}
+                <div>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                    <Users size={16} />
+                    Participants
+                  </label>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {users.map((participant) => (
+                      <div
+                        key={participant._id}
+                        className="flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200"
+                      >
+                        <span className="font-medium text-gray-700 truncate">{participant.name}</span>
+                        <span className="text-xs font-semibold px-2 py-1 rounded" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
+                          {participant.votesRemaining} vote{participant.votesRemaining !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Discussion History Button */}
+                <button
+                  onClick={() => router.push('/history')}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-semibold rounded-lg transition hover:opacity-90"
+                  style={{ backgroundColor: '#005596' }}
+                >
+                  <History size={20} />
+                  View Discussion History
+                </button>
               </div>
             </Column>
           </div>
@@ -383,7 +460,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             <textarea
               value={newTopicContent}
               onChange={(e) => setNewTopicContent(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent resize-none"
               placeholder="What would you like to discuss?"
               autoFocus
               rows={4}
@@ -401,7 +478,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             <button
               onClick={handleAddTopic}
               disabled={!newTopicContent.trim() || isSubmitting}
-              className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+              className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+              style={{ backgroundColor: !newTopicContent.trim() || isSubmitting ? undefined : '#005596' }}
             >
               {isSubmitting ? 'Adding...' : 'Add Topic'}
             </button>
@@ -431,7 +509,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           </button>
           <button
             onClick={handleConfirmDiscuss}
-            className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition"
+            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition"
+            style={{ backgroundColor: '#005596' }}
           >
             Confirm
           </button>

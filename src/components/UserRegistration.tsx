@@ -56,7 +56,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
@@ -109,7 +109,10 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none"
+            className="w-full text-white font-semibold py-3 px-6 rounded-lg transition duration-200 transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:transform-none"
+            style={{ backgroundColor: isSubmitting ? undefined : '#005596' }}
+            onMouseEnter={(e) => !isSubmitting && (e.currentTarget.style.backgroundColor = '#004275')}
+            onMouseLeave={(e) => !isSubmitting && (e.currentTarget.style.backgroundColor = '#005596')}
           >
             {isSubmitting ? 'Registering...' : 'Get Started'}
           </button>

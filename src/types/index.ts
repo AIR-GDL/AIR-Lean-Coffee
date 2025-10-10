@@ -12,8 +12,10 @@ export interface Topic {
   content: string;
   author: string;
   votes: number;
+  votedBy: string[]; // Array of user emails who voted
   status: 'to-discuss' | 'discussing' | 'discussed';
   createdAt: string;
+  discussedAt?: string;
 }
 
 // Client-side types
@@ -47,4 +49,5 @@ export interface UpdateTopicRequest {
   action?: 'VOTE';
   userEmail?: string;
   status?: 'to-discuss' | 'discussing' | 'discussed';
+  content?: string;
 }

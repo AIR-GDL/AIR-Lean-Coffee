@@ -13,10 +13,11 @@ interface ColumnProps {
   user: User;
   onVote: (topicId: string) => void;
   onAddTopic?: () => void;
+  onUpdate?: () => void;
   children?: React.ReactNode;
 }
 
-export default function Column({ id, title, topics, user, onVote, onAddTopic, children }: ColumnProps) {
+export default function Column({ id, title, topics, user, onVote, onAddTopic, onUpdate, children }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   const canVote = user.votesRemaining > 0;
@@ -64,6 +65,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, ch
                         user={user}
                         onVote={onVote}
                         canVote={canVote}
+                        onUpdate={onUpdate}
                       />
                     ))}
                   </div>
@@ -85,6 +87,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, ch
                         user={user}
                         onVote={onVote}
                         canVote={canVote}
+                        onUpdate={onUpdate}
                       />
                     ))}
                   </div>
@@ -110,6 +113,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, ch
                     onVote={onVote}
                     canVote={canVote}
                     isDraggable={id !== 'discussed' && id !== 'actions'}
+                    onUpdate={onUpdate}
                   />
                 ))}
               </div>
@@ -128,7 +132,8 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, ch
         <div className="p-4 border-t border-gray-200">
           <button
             onClick={onAddTopic}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-semibold rounded-lg transition hover:opacity-90"
+            style={{ backgroundColor: '#005596' }}
           >
             <Plus size={20} />
             Add Topic
