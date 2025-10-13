@@ -6,7 +6,7 @@ import { Topic, User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
 import { useUsers } from '@/hooks/useUsers';
-import { createTopic, updateTopic, fetchAllUsers } from '@/lib/api';
+import { createTopic, updateTopic, deleteTopic, fetchAllUsers } from '@/lib/api';
 import Column from './Column';
 import TopicCard from './TopicCard';
 import Timer from './Timer';
@@ -55,6 +55,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     startTime: null,
     remainingSeconds: null,
     currentTopicId: null,
+    isPaused: false,
+    pausedRemainingSeconds: null,
   });
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -63,6 +65,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [showVotingModal, setShowVotingModal] = useState(false);
   const [pendingTopicMove, setPendingTopicMove] = useState<{ topicId: string } | null>(null);
   const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
+  const [showAddTimeSlider, setShowAddTimeSlider] = useState(false);
+  const [additionalMinutes, setAdditionalMinutes] = useState(5);
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -145,6 +149,16 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     }
   };
 
+  const handleDeleteTopic = async (topicId: string) => {
+    try {
+      await deleteTopic(topicId);
+      await mutate(); // Refresh topics
+    } catch (error) {
+      console.error('Failed to delete topic:', error);
+      alert('Failed to delete topic. Please try again.');
+    }
+  };
+
   const handleDragStart = (event: DragEndEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -205,6 +219,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleTimerComplete = () => {
+    // Mark timer as paused at 0 seconds
+    setTimerSettings({
+      ...timerSettings,
+      isRunning: false,
+      isPaused: true,
+      pausedRemainingSeconds: 0,
+    });
     setShowVotingModal(true);
     setUserVote(null);
   };
@@ -218,10 +239,18 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       if (vote === 'finish') {
         // Move topic to discussed
         const currentTopicId = timerSettings.currentTopicId;
-        if (currentTopicId) {
+        if (currentTopicId && timerSettings.startTime) {
           try {
+            // Calculate elapsed time in seconds
+            const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+            
+            // Get current topic to add to existing time
+            const currentTopic = topics.find(t => t._id === currentTopicId);
+            const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+            
             await updateTopic(currentTopicId, {
               status: 'discussed',
+              totalTimeDiscussed: totalTime,
             });
 
             await mutate(); // Refresh topics
@@ -238,20 +267,35 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           startTime: null,
           remainingSeconds: null,
           currentTopicId: null,
+          isPaused: false,
+          pausedRemainingSeconds: null,
         });
       } else {
-        // Continue discussion - reset timer (BUG FIX)
-        setTimerSettings({
-          ...timerSettings,
-          isRunning: true, // Keep running
-          startTime: Date.now(), // New start time
-          remainingSeconds: timerSettings.durationMinutes * 60, // Reset to duration
-        });
+        // Continue discussion
+        if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
+          if (timerSettings.pausedRemainingSeconds === 0) {
+            // Timer expired - don't close modal, show add time slider instead
+            setShowAddTimeSlider(true);
+            return; // Exit early, don't close modal
+          } else {
+            // Finish early was clicked - resume from paused time
+            // Keep original startTime to track total duration
+            setTimerSettings({
+              ...timerSettings,
+              isRunning: true,
+              isPaused: false,
+              // Keep original startTime to track total duration from start
+              remainingSeconds: timerSettings.pausedRemainingSeconds,
+              pausedRemainingSeconds: null,
+            });
+          }
+        }
       }
 
       // Close modal first
       setShowVotingModal(false);
       setUserVote(null);
+      setShowAddTimeSlider(false);
 
       // Trigger confetti AFTER modal closes (only for finish action)
       if (vote === 'finish') {
@@ -266,15 +310,32 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     }, 500);
   };
 
-  const handleFinishEarly = () => {
-    // Trigger the same voting modal as when timer completes
-    setShowVotingModal(true);
+  const handleAddTimeConfirm = () => {
+    // Add the selected time and restart timer
+    // Keep the original startTime to track total discussion duration
+    setTimerSettings({
+      ...timerSettings,
+      isRunning: true,
+      isPaused: false,
+      // Keep original startTime to track total duration
+      remainingSeconds: additionalMinutes * 60,
+      pausedRemainingSeconds: null,
+    });
+    setShowAddTimeSlider(false);
+    setShowVotingModal(false);
     setUserVote(null);
-    // Pause the timer
+  };
+
+  const handleFinishEarly = () => {
+    // Pause the timer and store current remaining time
     setTimerSettings({
       ...timerSettings,
       isRunning: false,
+      isPaused: true,
+      pausedRemainingSeconds: timerSettings.remainingSeconds,
     });
+    setShowVotingModal(true);
+    setUserVote(null);
   };
 
   const handleLogout = () => {
@@ -287,14 +348,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center">
+      <div className="bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center py-20">
         <div className="text-2xl font-semibold text-gray-700">Loading board...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50">
+    <div className="bg-gradient-to-br from-blue-50 to-sky-50 pb-8">
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
@@ -303,10 +364,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               <h1 className="text-3xl font-bold text-gray-900">AIR Lean Coffee</h1>
             </div>
             <div className="flex items-center gap-4">
-              <p className="text-sm text-gray-600">Welcome, {user.name}</p>
-              <div className="text-right">
-                <p className="text-sm text-gray-600">Votes Remaining</p>
-                <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
+              <div className="flex items-center gap-6 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">User</p>
+                  <p className="text-sm font-semibold text-gray-900">{user.name}</p>
+                </div>
+                <div className="border-l border-gray-300 pl-6">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Votes Remaining</p>
+                  <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
+                </div>
               </div>
               <button
                 onClick={handleLogout}
@@ -376,6 +442,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               onVote={handleVote}
               onAddTopic={() => setShowAddTopicModal(true)}
               onUpdate={() => mutate()}
+              onDelete={handleDeleteTopic}
             />
 
             <Column
@@ -385,6 +452,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               user={user}
               onVote={handleVote}
               onUpdate={() => mutate()}
+              onDelete={handleDeleteTopic}
             />
 
             <Column
@@ -394,6 +462,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               user={user}
               onVote={handleVote}
               onUpdate={() => mutate()}
+              onDelete={handleDeleteTopic}
             />
 
             <Column
@@ -563,38 +632,78 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       <Modal
         isOpen={showVotingModal}
         onClose={() => {}}
-        title="Time's Up! Vote on Next Action"
+        title={showAddTimeSlider ? "Add More Time" : "Time's Up! Vote on Next Action"}
         showCloseButton={false}
       >
-        <p className="mb-6">Should we finish this topic or continue the discussion?</p>
-        <div className="flex flex-col gap-3">
-          <button
-            onClick={() => handleVoteSubmit('finish')}
-            disabled={userVote !== null}
-            className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
-              userVote === 'finish'
-                ? 'bg-green-600 text-white'
-                : 'bg-green-100 text-green-700 hover:bg-green-600 hover:text-white'
-            } disabled:cursor-not-allowed`}
-          >
-            {userVote === 'finish' ? '✓ Voted to ' : ''}Finish Topic
-          </button>
-          <button
-            onClick={() => handleVoteSubmit('continue')}
-            disabled={userVote !== null}
-            className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
-              userVote === 'continue'
-                ? 'bg-blue-600 text-white'
-                : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
-            } disabled:cursor-not-allowed`}
-          >
-            {userVote === 'continue' ? '✓ Voted to ' : ''}Continue Discussion
-          </button>
-        </div>
-        {userVote && (
-          <p className="text-sm text-gray-600 text-center mt-4">
-            Waiting for results...
-          </p>
+        {showAddTimeSlider ? (
+          // Add time slider UI
+          <div className="space-y-4">
+            <p className="text-gray-700">Select additional time to continue the discussion:</p>
+            <div>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={additionalMinutes}
+                onChange={(e) => setAdditionalMinutes(parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                style={{ accentColor: '#005596' }}
+              />
+              <div className="flex justify-between text-xs text-gray-600 mt-1">
+                <span>1 min</span>
+                <span className="font-bold text-lg" style={{ color: '#005596' }}>{additionalMinutes} minutes</span>
+                <span>10 min</span>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowAddTimeSlider(false);
+                  setShowVotingModal(false);
+                  setUserVote(null);
+                }}
+                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddTimeConfirm}
+                className="flex-1 px-4 py-3 text-white rounded-lg hover:opacity-90 transition"
+                style={{ backgroundColor: '#005596' }}
+              >
+                Add Time & Continue
+              </button>
+            </div>
+          </div>
+        ) : (
+          // Initial vote buttons
+          <>
+            <p className="mb-6">Should we finish this topic or continue the discussion?</p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => handleVoteSubmit('finish')}
+                disabled={userVote !== null}
+                className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
+                  userVote === 'finish'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-green-100 text-green-700 hover:bg-green-600 hover:text-white'
+                } disabled:cursor-not-allowed`}
+              >
+                {userVote === 'finish' ? '✓ Voted to ' : ''}Finish Topic
+              </button>
+              <button
+                onClick={() => handleVoteSubmit('continue')}
+                disabled={userVote !== null}
+                className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
+                  userVote === 'continue'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
+                } disabled:cursor-not-allowed`}
+              >
+                {userVote === 'continue' ? '✓ Voted to ' : ''}Continue Discussion
+              </button>
+            </div>
+          </>
         )}
       </Modal>
     </div>

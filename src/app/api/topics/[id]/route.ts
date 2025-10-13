@@ -107,6 +107,12 @@ export async function PUT(
 
       // Update status
       topic.status = status;
+      
+      // Update totalTimeDiscussed if provided
+      if (body.totalTimeDiscussed !== undefined) {
+        topic.totalTimeDiscussed = body.totalTimeDiscussed;
+      }
+      
       await topic.save();
 
       return NextResponse.json(topic, { status: 200 });

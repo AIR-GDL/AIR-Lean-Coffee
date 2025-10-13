@@ -17,6 +17,7 @@ export interface Topic {
   status: 'to-discuss' | 'discussing' | 'discussed';
   createdAt: string;
   discussedAt?: string;
+  totalTimeDiscussed: number; // Total discussion time in seconds
 }
 
 // Client-side types
@@ -28,6 +29,8 @@ export interface TimerSettings {
   startTime: number | null;
   remainingSeconds: number | null;
   currentTopicId: string | null;
+  isPaused: boolean;
+  pausedRemainingSeconds: number | null;
 }
 
 export interface VoteResult {
@@ -53,4 +56,5 @@ export interface UpdateTopicRequest {
   status?: 'to-discuss' | 'discussing' | 'discussed';
   title?: string;
   description?: string;
+  totalTimeDiscussed?: number;
 }

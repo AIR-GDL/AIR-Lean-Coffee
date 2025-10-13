@@ -9,6 +9,7 @@ import ThumbUpIcon from './icons/ThumbUpIcon';
 import EditIcon from './icons/EditIcon';
 import SaveIcon from './icons/SaveIcon';
 import CloseIcon from './icons/CloseIcon';
+import DeleteIcon from './icons/DeleteIcon';
 
 interface TopicCardProps {
   topic: Topic;
@@ -17,13 +18,15 @@ interface TopicCardProps {
   canVote: boolean;
   isDraggable?: boolean;
   onUpdate?: () => void;
+  onDelete?: (topicId: string) => void;
 }
 
-export default function TopicCard({ topic, user, onVote, canVote, isDraggable = true, onUpdate }: TopicCardProps) {
+export default function TopicCard({ topic, user, onVote, canVote, isDraggable = true, onUpdate, onDelete }: TopicCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(topic.title);
   const [editedDescription, setEditedDescription] = useState(topic.description || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const {
     attributes,
@@ -79,6 +82,16 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
     setIsEditing(false);
     setEditedTitle(topic.title);
     setEditedDescription(topic.description || '');
+    setShowDeleteConfirm(false);
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDelete) {
+      onDelete(topic._id);
+      setShowDeleteConfirm(false);
+      setIsEditing(false);
+    }
   };
 
   const hasUserVoted = topic.votedBy.includes(user.email);
@@ -130,6 +143,25 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                   <CloseIcon size={14} />
                   Cancel
                 </button>
+                {!showDeleteConfirm ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowDeleteConfirm(true);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 ml-auto"
+                  >
+                    <DeleteIcon size={14} />
+                    Delete
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleDelete}
+                    className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 ml-auto"
+                  >
+                    Confirm Delete?
+                  </button>
+                )}
               </div>
             </div>
           ) : (
@@ -140,7 +172,7 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                     {topic.title}
                   </h3>
                   {topic.description && (
-                    <p className="text-sm text-gray-600 line-clamp-3">
+                    <p className="text-sm text-gray-600 line-clamp-2">
                       {topic.description}
                     </p>
                   )}

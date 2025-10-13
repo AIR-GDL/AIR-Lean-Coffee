@@ -9,6 +9,7 @@ export interface ITopic extends Document {
   status: 'to-discuss' | 'discussing' | 'discussed';
   createdAt: Date;
   discussedAt?: Date;
+  totalTimeDiscussed: number; // Total discussion time in seconds
 }
 
 const TopicSchema = new Schema<ITopic>({
@@ -43,6 +44,10 @@ const TopicSchema = new Schema<ITopic>({
   },
   discussedAt: {
     type: Date,
+  },
+  totalTimeDiscussed: {
+    type: Number,
+    default: 0,
   },
 });
 

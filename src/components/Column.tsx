@@ -14,10 +14,11 @@ interface ColumnProps {
   onVote: (topicId: string) => void;
   onAddTopic?: () => void;
   onUpdate?: () => void;
+  onDelete?: (topicId: string) => void;
   children?: React.ReactNode;
 }
 
-export default function Column({ id, title, topics, user, onVote, onAddTopic, onUpdate, children }: ColumnProps) {
+export default function Column({ id, title, topics, user, onVote, onAddTopic, onUpdate, onDelete, children }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id });
 
   const canVote = user.votesRemaining > 0;
@@ -68,6 +69,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
                         onVote={onVote}
                         canVote={canVote}
                         onUpdate={onUpdate}
+                        onDelete={onDelete}
                       />
                     ))}
                   </div>
@@ -90,6 +92,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
                         onVote={onVote}
                         canVote={canVote}
                         onUpdate={onUpdate}
+                        onDelete={onDelete}
                       />
                     ))}
                   </div>
@@ -113,9 +116,10 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
                     topic={topic}
                     user={user}
                     onVote={onVote}
-                    canVote={canVote}
-                    isDraggable={id !== 'discussed' && id !== 'actions'}
+                    canVote={false}
+                    isDraggable={id === 'discussing'}
                     onUpdate={onUpdate}
+                    onDelete={onDelete}
                   />
                 ))}
               </div>
