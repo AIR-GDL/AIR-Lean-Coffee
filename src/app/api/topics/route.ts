@@ -23,17 +23,18 @@ export async function POST(request: NextRequest) {
     await connectDB();
     
     const body = await request.json();
-    const { content, author } = body;
+    const { title, description, author } = body;
 
-    if (!content || !author) {
+    if (!title || !author) {
       return NextResponse.json(
-        { error: 'Content and author are required' },
+        { error: 'Title and author are required' },
         { status: 400 }
       );
     }
 
     const topic = await Topic.create({
-      content,
+      title,
+      description: description || '',
       author,
       votes: 0,
       status: 'to-discuss',

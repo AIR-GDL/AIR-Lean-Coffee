@@ -1,7 +1,8 @@
 import mongoose, { Document, Model, Schema } from 'mongoose';
 
 export interface ITopic extends Document {
-  content: string;
+  title: string;
+  description?: string;
   author: string;
   votes: number;
   votedBy: string[]; // Array of user emails who voted
@@ -11,9 +12,13 @@ export interface ITopic extends Document {
 }
 
 const TopicSchema = new Schema<ITopic>({
-  content: {
+  title: {
     type: String,
-    required: [true, 'Content is required'],
+    required: [true, 'Title is required'],
+  },
+  description: {
+    type: String,
+    required: false,
   },
   author: {
     type: String,

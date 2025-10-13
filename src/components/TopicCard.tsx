@@ -21,7 +21,8 @@ interface TopicCardProps {
 
 export default function TopicCard({ topic, user, onVote, canVote, isDraggable = true, onUpdate }: TopicCardProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(topic.content);
+  const [editedTitle, setEditedTitle] = useState(topic.title);
+  const [editedDescription, setEditedDescription] = useState(topic.description || '');
   const [isSaving, setIsSaving] = useState(false);
 
   const {
@@ -49,16 +50,20 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
   const handleEditClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsEditing(true);
-    setEditedContent(topic.content);
+    setEditedTitle(topic.title);
+    setEditedDescription(topic.description || '');
   };
 
   const handleSave = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!editedContent.trim() || isSaving) return;
+    if (!editedTitle.trim() || isSaving) return;
 
     setIsSaving(true);
     try {
-      await updateTopic(topic._id, { content: editedContent.trim() });
+      await updateTopic(topic._id, { 
+        title: editedTitle.trim(),
+        description: editedDescription.trim()
+      });
       setIsEditing(false);
       if (onUpdate) onUpdate();
     } catch (error) {
@@ -72,7 +77,8 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
   const handleCancel = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsEditing(false);
-    setEditedContent(topic.content);
+    setEditedTitle(topic.title);
+    setEditedDescription(topic.description || '');
   };
 
   const hasUserVoted = topic.votedBy.includes(user.email);
@@ -92,19 +98,27 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
         <div className="flex-1 min-w-0">
           {isEditing ? (
             <div className="space-y-2">
+              <input
+                type="text"
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent font-semibold"
+                placeholder="Topic title"
+                autoFocus
+              />
               <textarea
-                value={editedContent}
-                onChange={(e) => setEditedContent(e.target.value)}
+                value={editedDescription}
+                onChange={(e) => setEditedDescription(e.target.value)}
                 className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent resize-none"
                 rows={3}
-                autoFocus
+                placeholder="Description (optional)"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleSave}
-                  disabled={!editedContent.trim() || isSaving}
+                  disabled={!editedTitle.trim() || isSaving}
                   className="flex items-center gap-1 px-2 py-1 text-white text-xs rounded hover:opacity-90 disabled:bg-gray-400"
-                  style={{ backgroundColor: editedContent.trim() && !isSaving ? '#005596' : undefined }}
+                  style={{ backgroundColor: editedTitle.trim() && !isSaving ? '#005596' : undefined }}
                 >
                   <SaveIcon size={14} />
                   {isSaving ? 'Saving...' : 'Save'}
@@ -121,13 +135,20 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
           ) : (
             <>
               <div className="flex items-start justify-between gap-2">
-                <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 flex-1">
-                  {topic.content}
-                </h3>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 mb-1">
+                    {topic.title}
+                  </h3>
+                  {topic.description && (
+                    <p className="text-sm text-gray-600 line-clamp-3">
+                      {topic.description}
+                    </p>
+                  )}
+                </div>
                 {canEdit && (
                   <button
                     onClick={handleEditClick}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition"
+                    className="p-1 text-gray-400 hover:text-gray-600 transition flex-shrink-0"
                     title="Edit topic"
                   >
                     <EditIcon size={16} />

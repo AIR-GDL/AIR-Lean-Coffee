@@ -9,7 +9,8 @@ export interface User {
 
 export interface Topic {
   _id: string;
-  content: string;
+  title: string;
+  description?: string;
   author: string;
   votes: number;
   votedBy: string[]; // Array of user emails who voted
@@ -41,7 +42,8 @@ export interface CreateUserRequest {
 }
 
 export interface CreateTopicRequest {
-  content: string;
+  title: string;
+  description?: string;
   author: string;
 }
 
@@ -49,5 +51,6 @@ export interface UpdateTopicRequest {
   action?: 'VOTE';
   userEmail?: string;
   status?: 'to-discuss' | 'discussing' | 'discussed';
-  content?: string;
+  title?: string;
+  description?: string;
 }

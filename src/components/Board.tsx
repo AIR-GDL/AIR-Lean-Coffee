@@ -64,7 +64,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [pendingTopicMove, setPendingTopicMove] = useState<{ topicId: string } | null>(null);
   const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
   
-  const [newTopicContent, setNewTopicContent] = useState('');
+  const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [newTopicDescription, setNewTopicDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sensors = useSensors(
@@ -98,17 +99,19 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleAddTopic = async () => {
-    if (!newTopicContent.trim() || isSubmitting) return;
+    if (!newTopicTitle.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
     try {
       await createTopic({
-        content: newTopicContent.trim(),
+        title: newTopicTitle.trim(),
+        description: newTopicDescription.trim(),
         author: user.name,
       });
       
       await mutate(); // Refresh topics
-      setNewTopicContent('');
+      setNewTopicTitle('');
+      setNewTopicDescription('');
       setShowAddTopicModal(false);
     } catch (error) {
       console.error('Failed to create topic:', error);
@@ -298,19 +301,19 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">AIR Lean Coffee</h1>
-              <p className="text-sm text-gray-600 mt-1">Welcome, {user.name}</p>
             </div>
             <div className="flex items-center gap-4">
+              <p className="text-sm text-gray-600">Welcome, {user.name}</p>
               <div className="text-right">
                 <p className="text-sm text-gray-600">Votes Remaining</p>
                 <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
               </div>
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                title="Logout"
               >
-                <LogoutIcon size={20} />
-                Logout
+                <LogoutIcon size={24} />
               </button>
             </div>
           </div>
@@ -325,6 +328,23 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               remainingSeconds={timerSettings.remainingSeconds}
               onTimeUp={handleTimerComplete}
             />
+            {/* Active Topic Display */}
+            {timerSettings.currentTopicId && (() => {
+              const currentTopic = topics.find(t => t._id === timerSettings.currentTopicId);
+              return currentTopic ? (
+                <div className="bg-white rounded-xl shadow-lg p-6 border-l-4" style={{ borderLeftColor: '#005596' }}>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3">{currentTopic.title}</h2>
+                      {currentTopic.description && (
+                        <p className="text-gray-700 whitespace-pre-wrap">{currentTopic.description}</p>
+                      )}
+                      <p className="text-sm text-gray-500 mt-3">by {currentTopic.author}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null;
+            })()}
             <div className="flex justify-center">
               <button
                 onClick={handleFinishEarly}
@@ -464,14 +484,27 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Discussion Topic *
+              Title *
+            </label>
+            <input
+              type="text"
+              value={newTopicTitle}
+              onChange={(e) => setNewTopicTitle(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+              placeholder="Enter topic title"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Description
             </label>
             <textarea
-              value={newTopicContent}
-              onChange={(e) => setNewTopicContent(e.target.value)}
+              value={newTopicDescription}
+              onChange={(e) => setNewTopicDescription(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent resize-none"
-              placeholder="What would you like to discuss?"
-              autoFocus
+              placeholder="Add additional details (optional)"
               rows={4}
             />
           </div>
@@ -486,9 +519,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             </button>
             <button
               onClick={handleAddTopic}
-              disabled={!newTopicContent.trim() || isSubmitting}
+              disabled={!newTopicTitle.trim() || isSubmitting}
               className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
-              style={{ backgroundColor: !newTopicContent.trim() || isSubmitting ? undefined : '#005596' }}
+              style={{ backgroundColor: !newTopicTitle.trim() || isSubmitting ? undefined : '#005596' }}
             >
               {isSubmitting ? 'Adding...' : 'Add Topic'}
             </button>

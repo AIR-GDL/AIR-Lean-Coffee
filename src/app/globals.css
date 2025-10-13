@@ -83,3 +83,9 @@ button:disabled,
 [disabled] {
   cursor: not-allowed !important;
 }
+
+/* Input and textarea text contrast */
+input,
+textarea {
+  color: #111827 !important;
+}

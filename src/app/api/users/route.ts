@@ -16,11 +16,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find existing user by email or create new one
+    // Check if user with this email already exists
     let user = await User.findOne({ email: email.toLowerCase() });
 
     if (user) {
-      // User exists, return existing user
+      // User exists - check if name needs to be updated
+      if (user.name !== name) {
+        user.name = name;
+        await user.save();
+      }
       return NextResponse.json(user, { status: 200 });
     }
 

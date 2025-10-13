@@ -32,9 +32,11 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
     <div className="flex flex-col h-full bg-gray-50 rounded-xl shadow-sm">
       <div className="flex items-center justify-between p-4 border-b border-gray-200">
         <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-        <span className="text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full">
-          {topics.length}
-        </span>
+        {id !== 'actions' && (
+          <span className="text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full">
+            {topics.length}
+          </span>
+        )}
       </div>
 
       {children && (

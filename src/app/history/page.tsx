@@ -99,9 +99,12 @@ export default function HistoryPage() {
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                      {topic.content}
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">
+                      {topic.title}
                     </h3>
+                    {topic.description && (
+                      <p className="text-gray-700 mb-3 whitespace-pre-wrap">{topic.description}</p>
+                    )}
                     <div className="flex items-center gap-6 text-sm text-gray-600">
                       <div className="flex items-center gap-2">
                         <PersonIcon size={16} />
