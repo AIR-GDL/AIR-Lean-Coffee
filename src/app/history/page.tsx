@@ -57,11 +57,10 @@ export default function HistoryPage() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/')}
-              className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-              style={{ backgroundColor: 'transparent' }}
+              className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              title="Back to Board"
             >
-              <ArrowBackIcon size={20} />
-              Back to Board
+              <ArrowBackIcon size={24} />
             </button>
             <div className="flex-1">
               <h1 className="text-3xl font-bold" style={{ color: '#005596' }}>

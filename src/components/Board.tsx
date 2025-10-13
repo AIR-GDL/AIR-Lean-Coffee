@@ -149,10 +149,38 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     }
   };
 
+  const triggerTrashConfetti = () => {
+    // Create custom trash can emoji shape for confetti
+    const scalar = 2;
+    const trashCan = confetti.shapeFromText({ text: '🗑️', scalar });
+
+    const defaults = {
+      spread: 360,
+      ticks: 60,
+      gravity: 0,
+      decay: 0.96,
+      startVelocity: 20,
+      shapes: [trashCan],
+      scalar
+    };
+
+    confetti({
+      ...defaults,
+      particleCount: 50,
+      scalar: scalar * 1.5,
+      origin: { y: 0.6 }
+    });
+  };
+
   const handleDeleteTopic = async (topicId: string) => {
     try {
       await deleteTopic(topicId);
       await mutate(); // Refresh topics
+      
+      // Trigger trash confetti animation
+      setTimeout(() => {
+        triggerTrashConfetti();
+      }, 100);
     } catch (error) {
       console.error('Failed to delete topic:', error);
       alert('Failed to delete topic. Please try again.');
@@ -365,12 +393,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-6 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">User</p>
-                  <p className="text-sm font-semibold text-gray-900">{user.name}</p>
+                <div className="flex flex-col justify-center">
+                  <p className="text-xs text-gray-500">Welcome</p>
+                  <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.name}</p>
                 </div>
-                <div className="border-l border-gray-300 pl-6">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Votes Remaining</p>
+                <div className="border-l border-gray-300 pl-6 flex flex-col justify-center">
+                  <p className="text-xs text-gray-500">Votes Remaining</p>
                   <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
                 </div>
               </div>

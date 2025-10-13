@@ -10,6 +10,7 @@ import EditIcon from './icons/EditIcon';
 import SaveIcon from './icons/SaveIcon';
 import CloseIcon from './icons/CloseIcon';
 import DeleteIcon from './icons/DeleteIcon';
+import Modal from './Modal';
 
 interface TopicCardProps {
   topic: Topic;
@@ -128,40 +129,28 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
               />
               <div className="flex gap-2">
                 <button
+                  onClick={handleCancel}
+                  className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
                   onClick={handleSave}
                   disabled={!editedTitle.trim() || isSaving}
-                  className="flex items-center gap-1 px-2 py-1 text-white text-xs rounded hover:opacity-90 disabled:bg-gray-400"
+                  className="px-3 py-1.5 text-white text-xs rounded hover:opacity-90 disabled:bg-gray-400"
                   style={{ backgroundColor: editedTitle.trim() && !isSaving ? '#005596' : undefined }}
                 >
-                  <SaveIcon size={14} />
                   {isSaving ? 'Saving...' : 'Save'}
                 </button>
                 <button
-                  onClick={handleCancel}
-                  className="flex items-center gap-1 px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowDeleteConfirm(true);
+                  }}
+                  className="px-3 py-1.5 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 ml-auto"
                 >
-                  <CloseIcon size={14} />
-                  Cancel
+                  Delete
                 </button>
-                {!showDeleteConfirm ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDeleteConfirm(true);
-                    }}
-                    className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 ml-auto"
-                  >
-                    <DeleteIcon size={14} />
-                    Delete
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleDelete}
-                    className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 ml-auto"
-                  >
-                    Confirm Delete?
-                  </button>
-                )}
               </div>
             </div>
           ) : (
@@ -229,6 +218,36 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete Topic"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-700">
+            Are you sure you want to delete this topic permanently? This action cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowDeleteConfirm(false);
+              }}
+              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+            >
+              Confirm Delete
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
