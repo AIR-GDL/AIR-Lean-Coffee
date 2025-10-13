@@ -4,7 +4,7 @@ import { Topic, User, ColumnType } from '@/types';
 import TopicCard from './TopicCard';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Plus } from 'lucide-react';
+import AddIcon from './icons/AddIcon';
 
 interface ColumnProps {
   id: ColumnType;
@@ -135,7 +135,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
             className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-semibold rounded-lg transition hover:opacity-90"
             style={{ backgroundColor: '#005596' }}
           >
-            <Plus size={20} />
+            <AddIcon size={20} />
             Add Topic
           </button>
         </div>

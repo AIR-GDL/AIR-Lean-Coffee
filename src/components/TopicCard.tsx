@@ -2,10 +2,13 @@
 
 import { useState } from 'react';
 import { Topic, User } from '@/types';
-import { ThumbsUp, Edit2, Save, X } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { updateTopic } from '@/lib/api';
+import ThumbUpIcon from './icons/ThumbUpIcon';
+import EditIcon from './icons/EditIcon';
+import SaveIcon from './icons/SaveIcon';
+import CloseIcon from './icons/CloseIcon';
 
 interface TopicCardProps {
   topic: Topic;
@@ -103,14 +106,14 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                   className="flex items-center gap-1 px-2 py-1 text-white text-xs rounded hover:opacity-90 disabled:bg-gray-400"
                   style={{ backgroundColor: editedContent.trim() && !isSaving ? '#005596' : undefined }}
                 >
-                  <Save size={14} />
+                  <SaveIcon size={14} />
                   {isSaving ? 'Saving...' : 'Save'}
                 </button>
                 <button
                   onClick={handleCancel}
                   className="flex items-center gap-1 px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
                 >
-                  <X size={14} />
+                  <CloseIcon size={14} />
                   Cancel
                 </button>
               </div>
@@ -127,7 +130,7 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                     className="p-1 text-gray-400 hover:text-gray-600 transition"
                     title="Edit topic"
                   >
-                    <Edit2 size={16} />
+                    <EditIcon size={16} />
                   </button>
                 )}
               </div>
@@ -161,14 +164,14 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
               }
             }}
           >
-            <ThumbsUp size={16} className={hasUserVoted ? 'fill-current' : ''} />
+            <ThumbUpIcon size={16} filled={hasUserVoted} />
             <span>{topic.votes}</span>
           </button>
         )}
         
         {!isEditing && topic.status !== 'to-discuss' && topic.votes > 0 && (
           <div className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-sm">
-            <ThumbsUp size={16} />
+            <ThumbUpIcon size={16} />
             <span>{topic.votes}</span>
           </div>
         )}

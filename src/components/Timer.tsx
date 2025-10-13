@@ -1,7 +1,7 @@
 'use client';
 
-import { Clock } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import ClockIcon from './icons/ClockIcon';
 
 interface TimerProps {
   remainingSeconds: number;
@@ -33,24 +33,22 @@ export default function Timer({ remainingSeconds, onTimeUp }: TimerProps) {
 
     return () => clearInterval(timer);
   }, [timeLeft, onTimeUp]);
-
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const isWarning = timeLeft <= 30;
   const isCritical = timeLeft <= 10;
 
+  const iconColor = isCritical ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-blue-600';
+
   return (
-    <div className={`flex items-center justify-center gap-4 p-6 rounded-2xl shadow-lg transition-all ${
+    <div className={`flex items-center justify-center gap-3 p-6 rounded-2xl shadow-lg transition-all ${
       isCritical 
         ? 'bg-red-100 border-4 border-red-500 animate-pulse' 
         : isWarning 
         ? 'bg-yellow-100 border-4 border-yellow-500' 
         : 'bg-blue-100 border-4 border-blue-500'
     }`}>
-      <Clock 
-        size={48} 
-        className={isCritical ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-blue-600'}
-      />
+      <ClockIcon size={32} className={iconColor} />
       <div className="text-6xl font-bold tabular-nums">
         <span className={isCritical ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-blue-600'}>
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}

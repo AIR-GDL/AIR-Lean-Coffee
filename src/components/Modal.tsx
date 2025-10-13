@@ -1,7 +1,7 @@
 'use client';
 
-import { X } from 'lucide-react';
 import { useEffect } from 'react';
+import CloseIcon from './icons/CloseIcon';
 
 interface ModalProps {
   isOpen: boolean;
@@ -38,7 +38,7 @@ export default function Modal({ isOpen, onClose, title, children, showCloseButto
             onClick={onClose}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
           >
-            <X size={24} />
+            <CloseIcon size={24} />
           </button>
         )}
         

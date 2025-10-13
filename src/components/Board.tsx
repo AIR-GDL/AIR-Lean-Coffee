@@ -12,8 +12,12 @@ import TopicCard from './TopicCard';
 import Timer from './Timer';
 import Modal from './Modal';
 import confetti from 'canvas-confetti';
-import { Clock, LogOut, History, Users, StopCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import ClockIcon from './icons/ClockIcon';
+import LogoutIcon from './icons/LogoutIcon';
+import HistoryIcon from './icons/HistoryIcon';
+import PeopleIcon from './icons/PeopleIcon';
+import StopIcon from './icons/StopIcon';
 
 interface BoardProps {
   user: User;
@@ -217,13 +221,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               status: 'discussed',
             });
 
-            // Trigger confetti
-            confetti({
-              particleCount: 100,
-              spread: 70,
-              origin: { y: 0.6 },
-            });
-
             await mutate(); // Refresh topics
             await mutateUsers(); // Refresh users to update vote counts
           } catch (error) {
@@ -249,8 +246,20 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         });
       }
 
+      // Close modal first
       setShowVotingModal(false);
       setUserVote(null);
+
+      // Trigger confetti AFTER modal closes (only for finish action)
+      if (vote === 'finish') {
+        setTimeout(() => {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 },
+          });
+        }, 100);
+      }
     }, 500);
   };
 
@@ -288,7 +297,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Lean Coffee Board</h1>
+              <h1 className="text-3xl font-bold text-gray-900">AIR Lean Coffee</h1>
               <p className="text-sm text-gray-600 mt-1">Welcome, {user.name}</p>
             </div>
             <div className="flex items-center gap-4">
@@ -300,7 +309,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                 onClick={handleLogout}
                 className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
               >
-                <LogOut size={20} />
+                <LogoutIcon size={20} />
                 Logout
               </button>
             </div>
@@ -319,10 +328,10 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             <div className="flex justify-center">
               <button
                 onClick={handleFinishEarly}
-                className="flex items-center gap-2 px-6 py-3 bg-white border-2 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition shadow-md"
-                style={{ borderColor: '#005596' }}
+                className="flex items-center gap-2 px-6 py-3 bg-white border-2 font-semibold rounded-lg hover:bg-gray-50 transition shadow-md"
+                style={{ borderColor: '#005596', color: '#005596' }}
               >
-                <StopCircle size={20} style={{ color: '#005596' }} />
+                <StopIcon size={20} />
                 Finish Early
               </button>
             </div>
@@ -378,7 +387,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                 {/* Discussion Duration */}
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                    <Clock size={16} />
+                    <ClockIcon size={16} />
                     Discussion Duration
                   </label>
                   <input
@@ -401,7 +410,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                 {/* Participants */}
                 <div>
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                    <Users size={16} />
+                    <PeopleIcon size={16} />
                     Participants
                   </label>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
@@ -425,7 +434,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-semibold rounded-lg transition hover:opacity-90"
                   style={{ backgroundColor: '#005596' }}
                 >
-                  <History size={20} />
+                  <HistoryIcon size={20} />
                   View Discussion History
                 </button>
               </div>

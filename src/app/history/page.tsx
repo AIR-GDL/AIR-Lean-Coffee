@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Topic } from '@/types';
 import { fetchDiscussionHistory } from '@/lib/api';
-import { ArrowLeft, Clock, User as UserIcon } from 'lucide-react';
+import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
+import ClockIcon from '@/components/icons/ClockIcon';
+import PersonIcon from '@/components/icons/PersonIcon';
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -58,7 +60,7 @@ export default function HistoryPage() {
               className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
               style={{ backgroundColor: 'transparent' }}
             >
-              <ArrowLeft size={20} />
+              <ArrowBackIcon size={20} />
               Back to Board
             </button>
             <div className="flex-1">
@@ -78,7 +80,7 @@ export default function HistoryPage() {
         {history.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
             <div className="text-gray-400 mb-4">
-              <Clock size={64} className="mx-auto" />
+              <ClockIcon size={64} className="mx-auto" />
             </div>
             <h2 className="text-2xl font-semibold text-gray-700 mb-2">
               No discussions yet
@@ -102,11 +104,11 @@ export default function HistoryPage() {
                     </h3>
                     <div className="flex items-center gap-6 text-sm text-gray-600">
                       <div className="flex items-center gap-2">
-                        <UserIcon size={16} />
+                        <PersonIcon size={16} />
                         <span>{topic.author}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Clock size={16} />
+                        <ClockIcon size={16} />
                         <span>{formatDate(topic.discussedAt)}</span>
                       </div>
                       {topic.votes > 0 && (

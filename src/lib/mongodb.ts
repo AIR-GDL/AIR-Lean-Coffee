@@ -29,10 +29,11 @@ async function connectDB(): Promise<typeof mongoose> {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
+      dbName: 'air-lean-coffee', // Explicitly set database name
     };
 
     cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
-      console.log('✅ MongoDB connected successfully');
+      console.log('✅ MongoDB connected successfully to air-lean-coffee database');
       return mongoose;
     });
   }

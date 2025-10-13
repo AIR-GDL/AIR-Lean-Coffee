@@ -60,7 +60,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Lean Coffee Board
+            AIR Lean Coffee
           </h1>
           <p className="text-gray-600">
             Welcome! Please register to get started.
@@ -77,7 +77,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition ${
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition text-gray-900 ${
                 errors.name ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter your name"
@@ -96,7 +96,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition ${
+              className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent transition text-gray-900 ${
                 errors.email ? 'border-red-500' : 'border-gray-300'
               }`}
               placeholder="Enter your email"
