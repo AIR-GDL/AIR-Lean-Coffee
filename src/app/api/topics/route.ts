@@ -2,17 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Topic from '@/models/Topic';
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     await connectDB();
     
     const topics = await Topic.find({}).sort({ createdAt: -1 });
     
     return NextResponse.json(topics, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in GET /api/topics:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch topics', details: error.message },
+      { error: 'Failed to fetch topics', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(topic, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in POST /api/topics:', error);
     return NextResponse.json(
-      { error: 'Failed to create topic', details: error.message },
+      { error: 'Failed to create topic', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

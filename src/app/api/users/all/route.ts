@@ -9,10 +9,10 @@ export async function GET() {
     const users = await User.find({}).sort({ createdAt: -1 });
     
     return NextResponse.json(users, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in GET /api/users/all:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch users', details: error.message },
+      { error: 'Failed to fetch users', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

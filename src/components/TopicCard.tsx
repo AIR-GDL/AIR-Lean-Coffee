@@ -7,9 +7,6 @@ import { CSS } from '@dnd-kit/utilities';
 import { updateTopic } from '@/lib/api';
 import ThumbUpIcon from './icons/ThumbUpIcon';
 import EditIcon from './icons/EditIcon';
-import SaveIcon from './icons/SaveIcon';
-import CloseIcon from './icons/CloseIcon';
-import DeleteIcon from './icons/DeleteIcon';
 import Modal from './Modal';
 
 interface TopicCardProps {

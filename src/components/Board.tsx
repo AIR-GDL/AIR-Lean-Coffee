@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { Topic, User, TimerSettings, ColumnType } from '@/types';
+import { User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
 import { useUsers } from '@/hooks/useUsers';
-import { createTopic, updateTopic, deleteTopic, fetchAllUsers } from '@/lib/api';
+import { createTopic, updateTopic, deleteTopic } from '@/lib/api';
 import Column from './Column';
 import TopicCard from './TopicCard';
 import Timer from './Timer';
@@ -95,6 +95,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         sessionStorage.setItem('lean-coffee-user', JSON.stringify(updatedUser));
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users]);
 
   const getTopicsByColumn = (columnId: ColumnType) => {
@@ -143,9 +144,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       }
 
       await mutate(); // Refresh topics
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to vote:', error);
-      alert(error.message || 'Failed to vote. Please try again.');
+      alert(error instanceof Error ? error.message : 'Failed to vote. Please try again.');
     }
   };
 

@@ -133,10 +133,10 @@ export async function PUT(
     }
 
     return NextResponse.json(topic, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in PUT /api/topics/[id]:', error);
     return NextResponse.json(
-      { error: 'Failed to update topic', details: error.message },
+      { error: 'Failed to update topic', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
@@ -164,10 +164,10 @@ export async function DELETE(
       { message: 'Topic deleted successfully', topic },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in DELETE /api/topics/[id]:', error);
     return NextResponse.json(
-      { error: 'Failed to delete topic', details: error.message },
+      { error: 'Failed to delete topic', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

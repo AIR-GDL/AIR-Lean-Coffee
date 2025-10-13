@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json(user, { status: 201 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in POST /api/users:', error);
     return NextResponse.json(
-      { error: 'Failed to create/find user', details: error.message },
+      { error: 'Failed to create/find user', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

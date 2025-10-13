@@ -11,10 +11,10 @@ export async function GET() {
       .sort({ discussedAt: -1 });
     
     return NextResponse.json(discussedTopics, { status: 200 });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in GET /api/topics/history:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch discussion history', details: error.message },
+      { error: 'Failed to fetch discussion history', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }
