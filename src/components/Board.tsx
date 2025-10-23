@@ -18,6 +18,10 @@ import LogoutIcon from './icons/LogoutIcon';
 import HistoryIcon from './icons/HistoryIcon';
 import PeopleIcon from './icons/PeopleIcon';
 import StopIcon from './icons/StopIcon';
+import CheckIcon from './icons/CheckIcon';
+import FeedbackMenu from './FeedbackMenu';
+import BugReportModal from './BugReportModal';
+import ChangelogModal from './ChangelogModal';
 
 interface BoardProps {
   user: User;
@@ -67,6 +71,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
   const [showAddTimeSlider, setShowAddTimeSlider] = useState(false);
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
+  const [showBugReportModal, setShowBugReportModal] = useState(false);
+  const [showChangelogModal, setShowChangelogModal] = useState(false);
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -403,6 +409,10 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
                 </div>
               </div>
+              <FeedbackMenu
+                onReportBug={() => setShowBugReportModal(true)}
+                onViewChangelog={() => setShowChangelogModal(true)}
+              />
               <button
                 onClick={handleLogout}
                 className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
@@ -712,29 +722,43 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               <button
                 onClick={() => handleVoteSubmit('finish')}
                 disabled={userVote !== null}
-                className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
+                className={`w-full px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
                   userVote === 'finish'
                     ? 'bg-green-600 text-white'
                     : 'bg-green-100 text-green-700 hover:bg-green-600 hover:text-white'
                 } disabled:cursor-not-allowed`}
               >
-                {userVote === 'finish' ? '✓ Voted to ' : ''}Finish Topic
+                {userVote === 'finish' && <CheckIcon size={20} color="currentColor" />}
+                {userVote === 'finish' ? 'Voted to ' : ''}Finish Topic
               </button>
               <button
                 onClick={() => handleVoteSubmit('continue')}
                 disabled={userVote !== null}
-                className={`w-full px-4 py-3 rounded-lg font-semibold transition ${
+                className={`w-full px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
                   userVote === 'continue'
                     ? 'bg-blue-600 text-white'
                     : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
                 } disabled:cursor-not-allowed`}
               >
-                {userVote === 'continue' ? '✓ Voted to ' : ''}Continue Discussion
+                {userVote === 'continue' && <CheckIcon size={20} color="currentColor" />}
+                {userVote === 'continue' ? 'Voted to ' : ''}Continue Discussion
               </button>
             </div>
           </>
         )}
       </Modal>
+
+      {/* Bug Report Modal */}
+      <BugReportModal
+        isOpen={showBugReportModal}
+        onClose={() => setShowBugReportModal(false)}
+      />
+
+      {/* Changelog Modal */}
+      <ChangelogModal
+        isOpen={showChangelogModal}
+        onClose={() => setShowChangelogModal(false)}
+      />
     </div>
   );
 }
