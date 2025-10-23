@@ -8,6 +8,8 @@ const bugReportSchema = new mongoose.Schema({
   severity: { type: String, enum: ['low', 'medium', 'high'], required: true },
   timestamp: { type: String },
   userAgent: { type: String },
+  userName: { type: String },
+  userEmail: { type: String },
   status: { type: String, enum: ['open', 'in-progress', 'resolved'], default: 'open' },
   createdAt: { type: Date, default: Date.now },
 });
@@ -41,6 +43,8 @@ export async function POST(request: NextRequest) {
       severity: body.severity,
       timestamp: body.timestamp || new Date().toISOString(),
       userAgent: body.userAgent || '',
+      userName: body.userName || '',
+      userEmail: body.userEmail || '',
       status: 'open',
     });
 

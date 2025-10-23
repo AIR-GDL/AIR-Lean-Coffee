@@ -1,7 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
+import confetti from 'canvas-confetti';
 import Modal from './Modal';
+import LoadingSpinner from './LoadingSpinner';
 
 interface BugReportModalProps {
   isOpen: boolean;
@@ -13,16 +16,52 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
   const [description, setDescription] = useState('');
   const [severity, setSeverity] = useState<'low' | 'medium' | 'high'>('medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitStatus, setSubmitStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [isSubmitted, setIsSubmitted] = useState(false);
+
+  const getUserInfo = () => {
+    try {
+      const storedUser = sessionStorage.getItem('lean-coffee-user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        return { userName: user.name, userEmail: user.email };
+      }
+    } catch (error) {
+      console.error('Error getting user info:', error);
+    }
+    return { userName: undefined, userEmail: undefined };
+  };
+
+  const triggerBugConfetti = () => {
+    const scalar = 2;
+    const bugEmoji = confetti.shapeFromText({ text: '🐛', scalar });
+
+    const defaults = {
+      spread: 360,
+      ticks: 60,
+      gravity: 0,
+      decay: 0.96,
+      startVelocity: 20,
+      shapes: [bugEmoji],
+      scalar,
+    };
+
+    confetti({
+      ...defaults,
+      particleCount: 50,
+      scalar: scalar * 1.5,
+      origin: { y: 0.6 },
+    });
+  };
 
   const handleSubmit = async () => {
     if (!title.trim() || !description.trim()) {
-      alert('Please fill in all required fields');
+      toast.error('Please fill in all required fields');
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const { userName, userEmail } = getUserInfo();
       const response = await fetch('/api/bugs', {
         method: 'POST',
         headers: {
@@ -34,6 +73,8 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
           severity,
           timestamp: new Date().toISOString(),
           userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+          userName,
+          userEmail,
         }),
       });
 
@@ -41,29 +82,36 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
         throw new Error('Failed to submit bug report');
       }
 
-      setSubmitStatus('success');
+      // Mark as submitted successfully
+      setIsSubmitted(true);
+
+      // Trigger confetti
+      triggerBugConfetti();
+
+      // Show success toast
+      toast.success('Bug report submitted successfully!');
+
+      // Close modal after delay
       setTimeout(() => {
         setTitle('');
         setDescription('');
         setSeverity('medium');
-        setSubmitStatus('idle');
+        setIsSubmitted(false);
         onClose();
       }, 2000);
     } catch (error) {
       console.error('Error submitting bug report:', error);
-      setSubmitStatus('error');
-      setTimeout(() => setSubmitStatus('idle'), 3000);
-    } finally {
+      toast.error('Failed to submit bug report. Please try again.');
       setIsSubmitting(false);
     }
   };
 
   const handleClose = () => {
-    if (!isSubmitting) {
+    if (!isSubmitting && !isSubmitted) {
       setTitle('');
       setDescription('');
       setSeverity('medium');
-      setSubmitStatus('idle');
+      setIsSubmitted(false);
       onClose();
     }
   };
@@ -75,19 +123,6 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
       title="Report a Bug"
     >
       <div className="space-y-4">
-        {submitStatus === 'success' && (
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-700 font-medium">✓ Bug report submitted successfully!</p>
-            <p className="text-sm text-green-600">Thank you for helping us improve the application.</p>
-          </div>
-        )}
-
-        {submitStatus === 'error' && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-700 font-medium">✗ Failed to submit bug report</p>
-            <p className="text-sm text-red-600">Please try again or contact support.</p>
-          </div>
-        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -143,11 +178,12 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!title.trim() || !description.trim() || isSubmitting}
-            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
-            style={{ backgroundColor: !title.trim() || !description.trim() || isSubmitting ? undefined : '#005596' }}
+            disabled={!title.trim() || !description.trim() || isSubmitting || isSubmitted}
+            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
+            style={{ backgroundColor: !title.trim() || !description.trim() || isSubmitting || isSubmitted ? undefined : '#005596' }}
           >
-            {isSubmitting ? 'Submitting...' : 'Submit Report'}
+            {isSubmitting && <LoadingSpinner size={16} color="white" />}
+            {isSubmitting ? 'Submitting...' : isSubmitted ? 'Report Sent!' : 'Submit Report'}
           </button>
         </div>
       </div>

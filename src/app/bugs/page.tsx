@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import BugIcon from '@/components/icons/BugIcon';
 import CheckIcon from '@/components/icons/CheckIcon';
 import EditIcon from '@/components/icons/EditIcon';
@@ -15,6 +16,8 @@ interface BugReport {
   severity: 'low' | 'medium' | 'high';
   timestamp: string;
   userAgent: string;
+  userName?: string;
+  userEmail?: string;
   status: 'open' | 'in-progress' | 'resolved';
   createdAt: string;
 }
@@ -25,6 +28,8 @@ export default function BugsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [editingBug, setEditingBug] = useState<BugReport | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [deletingBugId, setDeletingBugId] = useState<string | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [editForm, setEditForm] = useState<{
     title: string;
     description: string;
@@ -87,20 +92,28 @@ export default function BugsPage() {
     }
   };
 
-  const handleDeleteBug = async (bugId: string) => {
-    if (!confirm('Are you sure you want to delete this bug report?')) return;
+  const handleDeleteClick = (bugId: string) => {
+    setDeletingBugId(bugId);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingBugId) return;
 
     try {
-      const response = await fetch(`/api/bugs/${bugId}`, {
+      const response = await fetch(`/api/bugs/${deletingBugId}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) throw new Error('Failed to delete bug');
 
+      toast.success('Bug report deleted successfully');
+      setIsDeleteModalOpen(false);
+      setDeletingBugId(null);
       await fetchBugs();
     } catch (error) {
       console.error('Error deleting bug:', error);
-      alert('Failed to delete bug');
+      toast.error('Failed to delete bug');
     }
   };
 
@@ -124,7 +137,7 @@ export default function BugsPage() {
       case 'in-progress':
         return 'bg-blue-100 text-blue-800';
       case 'open':
-        return 'bg-red-100 text-red-800';
+        return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -194,9 +207,17 @@ export default function BugsPage() {
                       </span>
                     </div>
                     <p className="text-gray-700 whitespace-pre-wrap mb-3">{bug.description}</p>
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span>Reported: {new Date(bug.createdAt).toLocaleDateString()}</span>
-                      <span>ID: {bug._id.slice(-8)}</span>
+                    <div className="text-sm text-gray-600 mb-3">
+                      {bug.userName && (
+                        <span>
+                          <span className="font-medium">Reported by:</span> {bug.userName}
+                          {bug.userEmail && <span className="text-gray-500"> ({bug.userEmail})</span>}
+                          <span className="text-gray-500 mx-2">•</span>
+                          <span>Reported: {new Date(bug.createdAt).toLocaleDateString()}</span>
+                          <span className="text-gray-500 mx-2">•</span>
+                          <span>Bug reference: {bug._id.slice(-8)}</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -211,7 +232,7 @@ export default function BugsPage() {
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDeleteBug(bug._id)}
+                    onClick={() => handleDeleteClick(bug._id)}
                     className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
                   >
                     <DeleteIcon size={18} />
@@ -226,64 +247,71 @@ export default function BugsPage() {
 
       {/* Edit Modal */}
       {isEditModalOpen && editingBug && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-2xl max-h-96 overflow-y-auto">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6">Edit Bug Report</h2>
+        <div className="fixed inset-0 bg-gray-500/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-200 rounded-t-2xl">
+              <h2 className="text-2xl font-bold text-gray-900">Edit Bug Report</h2>
+            </div>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
-                <input
-                  type="text"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                <textarea
-                  value={editForm.description}
-                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                  rows={4}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+            {/* Scrolleable Content */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Severity</label>
-                  <select
-                    value={editForm.severity}
-                    onChange={(e) => setEditForm({ ...editForm, severity: e.target.value as 'low' | 'medium' | 'high' })}
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+                  <input
+                    type="text"
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                  <select
-                    value={editForm.status}
-                    onChange={(e) => setEditForm({ ...editForm, status: e.target.value as 'open' | 'in-progress' | 'resolved' })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="open">Open</option>
-                    <option value="in-progress">In Progress</option>
-                    <option value="resolved">Resolved</option>
-                  </select>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    rows={6}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Severity</label>
+                    <select
+                      value={editForm.severity}
+                      onChange={(e) => setEditForm({ ...editForm, severity: e.target.value as 'low' | 'medium' | 'high' })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select
+                      value={editForm.status}
+                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value as 'open' | 'in-progress' | 'resolved' })}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="open">Open</option>
+                      <option value="in-progress">In Progress</option>
+                      <option value="resolved">Resolved</option>
+                    </select>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
+            {/* Fixed Footer with Buttons */}
+            <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex gap-3 rounded-b-2xl">
               <button
                 onClick={() => setIsEditModalOpen(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
               >
                 Cancel
               </button>
@@ -292,6 +320,34 @@ export default function BugsPage() {
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 bg-gray-500/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-900">Delete Bug Report</h2>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-gray-700">Are you sure you want to delete this bug report? This action cannot be undone.</p>
+            </div>
+            <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex gap-3 rounded-b-2xl">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              >
+                Delete
               </button>
             </div>
           </div>
