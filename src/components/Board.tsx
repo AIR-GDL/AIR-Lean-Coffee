@@ -22,6 +22,7 @@ import CheckIcon from './icons/CheckIcon';
 import FeedbackMenu from './FeedbackMenu';
 import BugReportModal from './BugReportModal';
 import ChangelogModal from './ChangelogModal';
+import Image from 'next/image';
 
 interface BoardProps {
   user: User;
@@ -396,7 +397,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">AIR Lean Coffee</h1>
+              <Image
+                src="/lean_coffee_logo_long.svg"
+                alt="AIR Lean Coffee"
+                width={150}
+                height={45}
+                priority
+                className="h-12 w-auto"
+              />
             </div>
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-6 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">

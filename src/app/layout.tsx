@@ -13,6 +13,9 @@ const openSans = Open_Sans({
 export const metadata: Metadata = {
   title: "AIR Lean Coffee",
   description: "A collaborative lean coffee board for productive discussions",
+  icons: {
+    icon: "/icon.ico",
+  },
 };
 
 export default function RootLayout({

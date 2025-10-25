@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import BugIcon from '@/components/icons/BugIcon';
@@ -8,6 +8,7 @@ import CheckIcon from '@/components/icons/CheckIcon';
 import EditIcon from '@/components/icons/EditIcon';
 import DeleteIcon from '@/components/icons/DeleteIcon';
 import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
+import BugFiltersPanel from '@/components/BugFiltersPanel';
 
 interface BugReport {
   _id: string;
@@ -40,6 +41,11 @@ export default function BugsPage() {
     description: '',
     severity: 'medium',
     status: 'open',
+  });
+  const [filters, setFilters] = useState({
+    severity: [] as string[],
+    status: [] as string[],
+    searchQuery: '',
   });
 
   useEffect(() => {
@@ -143,9 +149,23 @@ export default function BugsPage() {
     }
   };
 
+  const filteredBugs = useMemo(() => {
+    return bugs.filter((bug) => {
+      const matchesSeverity = filters.severity.length === 0 || filters.severity.includes(bug.severity);
+      const matchesStatus = filters.status.length === 0 || filters.status.includes(bug.status);
+      const matchesSearch =
+        filters.searchQuery === '' ||
+        bug.title.toLowerCase().includes(filters.searchQuery.toLowerCase()) ||
+        bug.description.toLowerCase().includes(filters.searchQuery.toLowerCase()) ||
+        bug._id.slice(-8).includes(filters.searchQuery);
+
+      return matchesSeverity && matchesStatus && matchesSearch;
+    });
+  }, [bugs, filters]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 p-4">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-3">
@@ -178,10 +198,39 @@ export default function BugsPage() {
           </div>
         )}
 
-        {/* Bugs List */}
-        {!isLoading && bugs.length > 0 && (
-          <div className="space-y-4">
-            {bugs.map((bug) => (
+        {/* Filters and Bugs */}
+        <div className="flex gap-6">
+          {/* Filters Panel */}
+          <BugFiltersPanel bugs={bugs} filters={filters} onFiltersChange={setFilters} bugCount={filteredBugs.length} />
+
+          {/* Main Content */}
+          <div className="flex-1">
+            {/* Loading State */}
+            {isLoading && (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-2xl font-semibold text-gray-700">Loading bugs...</div>
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isLoading && filteredBugs.length === 0 && bugs.length > 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+                <BugIcon size={48} color="#9ca3af" />
+                <p className="text-gray-600 mt-4 text-lg">No bugs match your filters</p>
+              </div>
+            )}
+
+            {!isLoading && bugs.length === 0 && (
+              <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+                <BugIcon size={48} color="#9ca3af" />
+                <p className="text-gray-600 mt-4 text-lg">No bug reports yet</p>
+              </div>
+            )}
+
+            {/* Bugs List */}
+            {!isLoading && filteredBugs.length > 0 && (
+              <div className="space-y-4">
+                {filteredBugs.map((bug) => (
               <div
                 key={bug._id}
                 className="bg-white rounded-xl shadow-md hover:shadow-lg transition p-6 border-l-4"
@@ -241,8 +290,10 @@ export default function BugsPage() {
                 </div>
               </div>
             ))}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* Edit Modal */}

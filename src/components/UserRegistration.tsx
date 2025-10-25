@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { User } from '@/types';
 import { createOrGetUser } from '@/lib/api';
 
@@ -59,9 +60,14 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            AIR Lean Coffee
-          </h1>
+          <Image
+            src="/lean_coffee_logo_small.svg"
+            alt="AIR Lean Coffee"
+            width={350}
+            height={350}
+            priority
+            className="w-60 h-60 mx-auto mb-4"
+          />
           <p className="text-gray-600">
             Welcome! Please register to get started.
           </p>
