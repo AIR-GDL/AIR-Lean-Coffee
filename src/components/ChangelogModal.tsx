@@ -84,9 +84,9 @@ export default function ChangelogModal({ isOpen, onClose }: ChangelogModalProps)
             </div>
             <ul className="space-y-2">
               {entry.changes.map((change, index) => (
-                <li key={`${entry.version}-${index}`} className="flex items-start gap-2 text-gray-700">
-                  <span className="text-blue-500 font-bold mt-1">•</span>
-                  <span>{change}</span>
+                <li key={`${entry.version}-${index}`} className="flex items-start gap-2 text-gray-700 break-words">
+                  <span className="text-blue-500 font-bold mt-1 flex-shrink-0">•</span>
+                  <span className="break-words">{change}</span>
                 </li>
               ))}
             </ul>

@@ -26,13 +26,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={openSans.className} suppressHydrationWarning={true}>
+    <html lang="en" className={`${openSans.className} h-screen`} suppressHydrationWarning={true}>
       <head>
         <PreloadLink />
       </head>
-      <body className="antialiased flex flex-col min-h-screen" suppressHydrationWarning={true}>
+      <body className="antialiased flex flex-col h-screen overflow-hidden" suppressHydrationWarning={true}>
         <LoaderProvider>
-          <main className="flex-1">
+          <main className="flex-1 overflow-hidden">
             {children}
           </main>
           <Footer />

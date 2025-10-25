@@ -42,7 +42,7 @@ export default function Modal({ isOpen, onClose, title, children, showCloseButto
           </button>
         )}
         
-        <h2 className="text-2xl font-bold text-gray-900 mb-4 pr-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4 pr-8 truncate break-words">
           {title}
         </h2>
         

@@ -29,29 +29,35 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
   const newTopics = isToDiscussColumn ? topics.filter(t => t.votes === 0) : [];
   const regularTopics = !isToDiscussColumn ? topics : [];
 
+  // Determine if this column is draggable
+  const isDraggableColumn = id === 'discussing' || id === 'discussed';
+
   return (
-    <div className="flex flex-col h-full bg-gray-50 rounded-xl shadow-sm">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+    <div className={`flex flex-col flex-1 w-full h-full min-h-0 bg-gray-50 rounded-xl shadow-sm transition-all ${
+      isDraggableColumn && isOver ? 'border-2 border-dashed border-blue-500' : 'border-2 border-transparent'
+    }`}>
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 min-w-0">
+        <h2 className="text-lg font-bold text-gray-900 truncate">{title}</h2>
         {id !== 'actions' && (
-          <span className="text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full">
+          <span className="text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full flex-shrink-0">
             {topics.length}
           </span>
         )}
       </div>
 
       {children && (
-        <div className="p-4 border-b border-gray-200">
+        <div className="flex-shrink-0 p-4 border-b border-gray-200">
           {children}
         </div>
       )}
 
       <div
         ref={setNodeRef}
-        className={`flex-1 overflow-y-auto p-4 space-y-4 min-h-[200px] ${
-          isOver ? 'bg-blue-50' : ''
+        className={`flex-1 min-h-0 overflow-y-auto transition-colors ${
+          isDraggableColumn && isOver ? 'bg-blue-100' : 'bg-gray-50'
         }`}
       >
+        <div className="p-4 space-y-4 min-h-[300px]">
         {isToDiscussColumn ? (
           <>
             {topVotedTopics.length > 0 && (
@@ -118,7 +124,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
                     user={user}
                     onVote={onVote}
                     canVote={false}
-                    isDraggable={id === 'discussing'}
+                    isDraggable={isDraggableColumn}
                     onUpdate={onUpdate}
                     onDelete={onDelete}
                   />
@@ -133,6 +139,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
             )}
           </>
         )}
+        </div>
       </div>
 
       {onAddTopic && (

@@ -113,14 +113,14 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                 type="text"
                 value={editedTitle}
                 onChange={(e) => setEditedTitle(e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent font-semibold"
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent font-semibold overflow-hidden truncate"
                 placeholder="Topic title"
                 autoFocus
               />
               <textarea
                 value={editedDescription}
                 onChange={(e) => setEditedDescription(e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent resize-none"
+                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent resize-none overflow-hidden"
                 rows={3}
                 placeholder="Description (optional)"
               />
@@ -152,13 +152,13 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
             </div>
           ) : (
             <>
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1">
+              <div className="flex items-start justify-between gap-2 min-w-0">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-900 mb-1 truncate break-words">
                     {topic.title}
                   </h3>
                   {topic.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2">
+                    <p className="text-sm text-gray-600 line-clamp-2 break-words">
                       {topic.description}
                     </p>
                   )}

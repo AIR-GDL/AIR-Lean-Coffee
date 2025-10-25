@@ -244,19 +244,19 @@ export default function BugsPage() {
                 }}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h2 className="text-xl font-bold text-gray-900">{bug.title}</h2>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium border ${getSeverityColor(bug.severity)}`}>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <h2 className="text-xl font-bold text-gray-900 truncate break-words">{bug.title}</h2>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium border flex-shrink-0 ${getSeverityColor(bug.severity)}`}>
                         {bug.severity.toUpperCase()}
                       </span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 w-fit ${getStatusBgColor(bug.status)}`}>
+                      <span className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 w-fit flex-shrink-0 ${getStatusBgColor(bug.status)}`}>
                         {bug.status === 'resolved' && <CheckIcon size={16} color="currentColor" />}
                         <span>{bug.status.charAt(0).toUpperCase() + bug.status.slice(1)}</span>
                       </span>
                     </div>
-                    <p className="text-gray-700 whitespace-pre-wrap mb-3">{bug.description}</p>
-                    <div className="text-sm text-gray-600 mb-3">
+                    <p className="text-gray-700 whitespace-pre-wrap mb-3 break-words line-clamp-4">{bug.description}</p>
+                    <div className="text-sm text-gray-600 mb-3 break-words">
                       {bug.userName && (
                         <span>
                           <span className="font-medium">Reported by:</span> {bug.userName}

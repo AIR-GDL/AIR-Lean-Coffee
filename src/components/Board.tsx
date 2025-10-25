@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DndContext, DragEndEvent, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
@@ -222,7 +222,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
     if (!topic || statusToColumnId(topic.status) === targetColumnId) return;
 
-    // Only allow moving to "Discussing" from "Top Voted" section
+    // Only allow moving to "Discussing" from "Top Voted" section (to-discuss with votes)
     if (targetColumnId === 'discussing') {
       if (topic.status === 'to-discuss' && topic.votes > 0) {
         setPendingTopicMove({ topicId });
@@ -231,8 +231,17 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       return;
     }
 
+    // Allow moving between "discussing" and "discussed" columns
+    if (targetColumnId === 'discussed') {
+      if (topic.status === 'discussing') {
+        // Allow moving from discussing to discussed (manual move)
+        return;
+      }
+      return;
+    }
+
     // Prevent moving to other columns inappropriately
-    if (targetColumnId === 'toDiscuss' || targetColumnId === 'discussed' || targetColumnId === 'actions') {
+    if (targetColumnId === 'toDiscuss' || targetColumnId === 'actions') {
       return;
     }
   };
@@ -401,9 +410,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const activeTopic = activeId ? topics.find(t => t._id === activeId) : null;
 
   return (
-    <div className="bg-gradient-to-br from-blue-50 to-sky-50 pb-8">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden bg-gradient-to-br from-blue-50 to-sky-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
@@ -445,7 +454,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
       {/* Timer Display */}
       {timerSettings.isRunning && timerSettings.remainingSeconds !== null && (
-        <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="flex-shrink-0 max-w-7xl mx-auto w-full px-4 py-6">
           <div className="space-y-4">
             <Timer
               remainingSeconds={timerSettings.remainingSeconds}
@@ -456,13 +465,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               const currentTopic = topics.find(t => t._id === timerSettings.currentTopicId);
               return currentTopic ? (
                 <div className="bg-white rounded-xl shadow-lg p-6 border-l-4" style={{ borderLeftColor: '#005596' }}>
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1">
-                      <h2 className="text-2xl font-bold text-gray-900 mb-3">{currentTopic.title}</h2>
+                  <div className="flex items-start gap-4 min-w-0">
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-2xl font-bold text-gray-900 mb-3 truncate break-words">{currentTopic.title}</h2>
                       {currentTopic.description && (
-                        <p className="text-gray-700 whitespace-pre-wrap">{currentTopic.description}</p>
+                        <p className="text-gray-700 whitespace-pre-wrap break-words line-clamp-3">{currentTopic.description}</p>
                       )}
-                      <p className="text-sm text-gray-500 mt-3">by {currentTopic.author}</p>
+                      <p className="text-sm text-gray-500 mt-3 truncate">by {currentTopic.author}</p>
                     </div>
                   </div>
                 </div>
@@ -483,14 +492,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       )}
 
       {/* Board */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 h-[calc(100vh-250px)]">
+      <main className="flex-1 overflow-hidden min-h-0">
+        <div className="h-full min-h-0 max-w-7xl mx-auto w-full px-4 py-6">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full w-full">
             <Column
               id="toDiscuss"
               title="To Discuss"
@@ -563,10 +573,10 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     {users.map((participant) => (
                       <div
                         key={participant._id}
-                        className="flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200"
+                        className="flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0"
                       >
                         <span className="font-medium text-gray-700 truncate">{participant.name}</span>
-                        <span className="text-xs font-semibold px-2 py-1 rounded" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
+                        <span className="text-xs font-semibold px-2 py-1 rounded flex-shrink-0" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
                           {participant.votesRemaining} vote{participant.votesRemaining !== 1 ? 's' : ''}
                         </span>
                       </div>
@@ -587,18 +597,19 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             </Column>
           </div>
 
-          <DragOverlay>
-            {activeTopic ? (
-              <TopicCard
-                topic={activeTopic}
-                user={user}
-                onVote={() => {}}
-                canVote={false}
-                isDraggable={false}
-              />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+            <DragOverlay>
+              {activeTopic ? (
+                <TopicCard
+                  topic={activeTopic}
+                  user={user}
+                  onVote={() => {}}
+                  canVote={false}
+                  isDraggable={false}
+                />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </div>
       </main>
 
       {/* Add Topic Modal */}
