@@ -13,6 +13,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "canvas-confetti": "^1.9.3",
+    "lottie-react": "^2.4.1",
     "lucide-react": "^0.545.0",
     "mongoose": "^8.19.1",
     "next": "16.0.0",

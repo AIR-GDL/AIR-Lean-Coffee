@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { User } from '@/types';
 import { createOrGetUser } from '@/lib/api';
 import { APP_VERSION } from '@/lib/version';
+import { useGlobalLoader } from '@/context/LoaderContext';
 
 interface UserRegistrationProps {
   onRegister: (user: User) => void;
@@ -15,6 +16,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState({ name: '', email: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { showLoader, hideLoader } = useGlobalLoader();
 
   const validateForm = () => {
     const newErrors = { name: '', email: '' };
@@ -42,6 +44,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
     
     if (validateForm()) {
       setIsSubmitting(true);
+      showLoader('Registering user...');
       try {
         const user = await createOrGetUser({
           name: name.trim(),
@@ -51,6 +54,7 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
       } catch (error) {
         console.error('Registration error:', error);
         setErrors({ ...errors, email: 'Failed to register. Please try again.' });
+        hideLoader();
       } finally {
         setIsSubmitting(false);
       }

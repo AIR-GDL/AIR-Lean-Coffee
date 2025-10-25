@@ -23,6 +23,7 @@ import FeedbackMenu from './FeedbackMenu';
 import BugReportModal from './BugReportModal';
 import ChangelogModal from './ChangelogModal';
 import Image from 'next/image';
+import { useGlobalLoader } from '@/context/LoaderContext';
 
 interface BoardProps {
   user: User;
@@ -53,6 +54,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const router = useRouter();
   const { topics, isLoading, mutate } = useTopics();
   const { users, mutate: mutateUsers } = useUsers();
+  const { showLoader, hideLoader } = useGlobalLoader();
   const [user, setUser] = useState<User>(initialUser);
   const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
     durationMinutes: 5,
@@ -87,6 +89,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     })
   );
 
+  // Show loader when loading board
+  useEffect(() => {
+    if (isLoading) {
+      showLoader('Loading board...');
+    } else {
+      hideLoader();
+    }
+  }, [isLoading, showLoader, hideLoader]);
+
   // Update user in state when initialUser changes
   useEffect(() => {
     setUser(initialUser);
@@ -114,6 +125,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!newTopicTitle.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
+    showLoader('Creating topic...');
     try {
       await createTopic({
         title: newTopicTitle.trim(),
@@ -130,6 +142,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       alert('Failed to create topic. Please try again.');
     } finally {
       setIsSubmitting(false);
+      hideLoader();
     }
   };
 
@@ -139,6 +152,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       return;
     }
 
+    showLoader('Voting...');
     try {
       const response = await updateTopic(topicId, {
         action: 'VOTE',
@@ -154,6 +168,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to vote:', error);
       alert(error instanceof Error ? error.message : 'Failed to vote. Please try again.');
+    } finally {
+      hideLoader();
     }
   };
 
@@ -181,6 +197,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleDeleteTopic = async (topicId: string) => {
+    showLoader('Deleting topic...');
     try {
       await deleteTopic(topicId);
       await mutate(); // Refresh topics
@@ -192,6 +209,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to delete topic:', error);
       alert('Failed to delete topic. Please try again.');
+    } finally {
+      hideLoader();
     }
   };
 
@@ -231,6 +250,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
     const { topicId } = pendingTopicMove;
     
+    showLoader('Starting discussion...');
     try {
       await updateTopic(topicId, {
         status: 'discussing',
@@ -251,6 +271,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to update topic status:', error);
       alert('Failed to start discussion. Please try again.');
+    } finally {
+      hideLoader();
     }
   };
 
@@ -273,6 +295,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     // For now, we'll simulate immediate action
     setTimeout(async () => {
       if (vote === 'finish') {
+        showLoader('Finishing topic...');
         // Move topic to discussed
         const currentTopicId = timerSettings.currentTopicId;
         if (currentTopicId && timerSettings.startTime) {
@@ -293,6 +316,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             await mutateUsers(); // Refresh users to update vote counts
           } catch (error) {
             console.error('Failed to finish topic:', error);
+          } finally {
+            hideLoader();
           }
         }
 
@@ -307,11 +332,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           pausedRemainingSeconds: null,
         });
       } else {
+        showLoader('Continuing discussion...');
         // Continue discussion
         if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
           if (timerSettings.pausedRemainingSeconds === 0) {
             // Timer expired - don't close modal, show add time slider instead
             setShowAddTimeSlider(true);
+            hideLoader();
             return; // Exit early, don't close modal
           } else {
             // Finish early was clicked - resume from paused time
@@ -326,6 +353,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             });
           }
         }
+        hideLoader();
       }
 
       // Close modal first
@@ -375,20 +403,10 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleLogout = () => {
-    if (confirm('Are you sure you want to logout?')) {
-      onLogout();
-    }
+    onLogout();
   };
 
   const activeTopic = activeId ? topics.find(t => t._id === activeId) : null;
-
-  if (isLoading) {
-    return (
-      <div className="bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center py-20">
-        <div className="text-2xl font-semibold text-gray-700">Loading board...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="bg-gradient-to-br from-blue-50 to-sky-50 pb-8">
