@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { DndContext, DragEndEvent, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { DndContext, DragEndEvent, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
@@ -214,12 +214,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const { active, over } = event;
     setActiveId(null);
 
+    // If no drop target detected, return early
     if (!over) return;
 
     const topicId = active.id as string;
     const targetColumnId = over.id as ColumnType;
     const topic = topics.find(t => t._id === topicId);
 
+    // Validate topic exists and is not already in target column
     if (!topic || statusToColumnId(topic.status) === targetColumnId) return;
 
     // Only allow moving to "Discussing" from "Top Voted" section (to-discuss with votes)
@@ -235,7 +237,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (targetColumnId === 'discussed') {
       if (topic.status === 'discussing') {
         // Allow moving from discussing to discussed (manual move)
-        return;
+        handleMoveToDiscussed(topicId);
       }
       return;
     }
@@ -243,6 +245,33 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     // Prevent moving to other columns inappropriately
     if (targetColumnId === 'toDiscuss' || targetColumnId === 'actions') {
       return;
+    }
+  };
+
+  const handleMoveToDiscussed = async (topicId: string) => {
+    showLoader('Moving topic...');
+    try {
+      const topic = topics.find(t => t._id === topicId);
+      if (!topic) return;
+
+      // Calculate elapsed time if topic is currently being discussed
+      let totalTime = topic.totalTimeDiscussed || 0;
+      if (topic.status === 'discussing' && timerSettings.startTime) {
+        const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+        totalTime += elapsedSeconds;
+      }
+
+      await updateTopic(topicId, {
+        status: 'discussed',
+        totalTimeDiscussed: totalTime,
+      });
+
+      await mutate(); // Refresh topics
+    } catch (error) {
+      console.error('Failed to move topic to discussed:', error);
+      alert('Failed to move topic. Please try again.');
+    } finally {
+      hideLoader();
     }
   };
 
@@ -496,7 +525,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         <div className="h-full min-h-0 max-w-7xl mx-auto w-full px-4 py-6">
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={pointerWithin}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
@@ -538,10 +567,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               topics={[]}
               user={user}
               onVote={handleVote}
+              onAddTopic={() => router.push('/history')}
+              buttonLabel="Discussion History"
+              buttonIcon={<HistoryIcon size={20} />}
             >
-              <div className="space-y-6">
+              <div className="flex flex-col h-full min-h-0 space-y-4">
                 {/* Discussion Duration */}
-                <div>
+                <div className="flex-shrink-0">
                   <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
                     <ClockIcon size={16} />
                     Discussion Duration
@@ -563,17 +595,17 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   </div>
                 </div>
 
-                {/* Participants */}
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+                {/* Participants with scroll */}
+                <div className="flex-1 flex flex-col min-h-0">
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2 flex-shrink-0">
                     <PeopleIcon size={16} />
                     Participants
                   </label>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-2">
                     {users.map((participant) => (
                       <div
                         key={participant._id}
-                        className="flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0"
+                        className="flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0 flex-shrink-0"
                       >
                         <span className="font-medium text-gray-700 truncate">{participant.name}</span>
                         <span className="text-xs font-semibold px-2 py-1 rounded flex-shrink-0" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
@@ -583,16 +615,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     ))}
                   </div>
                 </div>
-
-                {/* Discussion History Button */}
-                <button
-                  onClick={() => router.push('/history')}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-semibold rounded-lg transition hover:opacity-90"
-                  style={{ backgroundColor: '#005596' }}
-                >
-                  <HistoryIcon size={20} />
-                  View Discussion History
-                </button>
               </div>
             </Column>
           </div>

@@ -5,6 +5,7 @@ import TopicCard from './TopicCard';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import AddIcon from './icons/AddIcon';
+import HistoryIcon from './icons/HistoryIcon';
 
 interface ColumnProps {
   id: ColumnType;
@@ -13,13 +14,21 @@ interface ColumnProps {
   user: User;
   onVote: (topicId: string) => void;
   onAddTopic?: () => void;
+  buttonLabel?: string;
+  buttonIcon?: React.ReactNode;
   onUpdate?: () => void;
   onDelete?: (topicId: string) => void;
   children?: React.ReactNode;
 }
 
-export default function Column({ id, title, topics, user, onVote, onAddTopic, onUpdate, onDelete, children }: ColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+export default function Column({ id, title, topics, user, onVote, onAddTopic, buttonLabel, buttonIcon, onUpdate, onDelete, children }: ColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ 
+    id,
+    data: {
+      type: 'Column',
+      columnId: id,
+    }
+  });
 
   const canVote = user.votesRemaining > 0;
 
@@ -46,18 +55,21 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
       </div>
 
       {children && (
-        <div className="flex-shrink-0 p-4 border-b border-gray-200">
-          {children}
+        <div className="flex-1 min-h-0 overflow-y-auto border-b border-gray-200">
+          <div className="p-4 space-y-4">
+            {children}
+          </div>
         </div>
       )}
 
-      <div
-        ref={setNodeRef}
-        className={`flex-1 min-h-0 overflow-y-auto transition-colors ${
-          isDraggableColumn && isOver ? 'bg-blue-100' : 'bg-gray-50'
-        }`}
-      >
-        <div className="p-4 space-y-4 min-h-[300px]">
+      {!children && (
+        <div
+          ref={setNodeRef}
+          className={`flex-1 min-h-0 overflow-y-auto transition-colors ${
+            isDraggableColumn && isOver ? 'bg-blue-100' : 'bg-gray-50'
+          }`}
+        >
+          <div className="p-4 space-y-4 min-h-[300px]">
         {isToDiscussColumn ? (
           <>
             {topVotedTopics.length > 0 && (
@@ -139,8 +151,9 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
             )}
           </>
         )}
+          </div>
         </div>
-      </div>
+      )}
 
       {onAddTopic && (
         <div className="p-4 border-t border-gray-200">
@@ -149,8 +162,8 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
             className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-semibold rounded-lg transition hover:opacity-90"
             style={{ backgroundColor: '#005596' }}
           >
-            <AddIcon size={20} />
-            Add Topic
+            {buttonIcon || <AddIcon size={20} />}
+            {buttonLabel || 'Add Topic'}
           </button>
         </div>
       )}
