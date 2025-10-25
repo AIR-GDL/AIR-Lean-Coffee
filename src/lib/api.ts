@@ -24,6 +24,15 @@ export async function fetchTopics(): Promise<Topic[]> {
 
   if (!response.ok) {
     const error = await response.json();
+    
+    // If user not found (404), redirect to register
+    if (response.status === 404) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+      throw new Error('User not found');
+    }
+    
     throw new Error(error.error || 'Failed to fetch topics');
   }
 
@@ -79,10 +88,66 @@ export async function fetchAllUsers(): Promise<User[]> {
 
   if (!response.ok) {
     const error = await response.json();
+    
+    // If user not found (404), clear session and redirect to register
+    if (response.status === 404) {
+      if (typeof window !== 'undefined') {
+        // Clear session storage
+        sessionStorage.removeItem('lean-coffee-user');
+        sessionStorage.removeItem('lean-coffee-session');
+        // Redirect to register
+        window.location.href = '/';
+      }
+      throw new Error('User not found');
+    }
+    
     throw new Error(error.error || 'Failed to fetch users');
   }
 
-  return response.json();
+  const users = await response.json();
+  
+  // Check if current user exists in the list
+  if (typeof window !== 'undefined') {
+    const currentUserStr = sessionStorage.getItem('lean-coffee-user');
+    if (currentUserStr) {
+      try {
+        const currentUser = JSON.parse(currentUserStr);
+        const userExists = users.some((u: User) => u.email === currentUser.email);
+        
+        // If current user doesn't exist in the list, they were deleted
+        if (!userExists) {
+          // Clear session storage
+          sessionStorage.removeItem('lean-coffee-user');
+          sessionStorage.removeItem('lean-coffee-session');
+          // Redirect to register
+          window.location.href = '/';
+          throw new Error('Current user not found in users list');
+        }
+      } catch (error) {
+        // If error parsing, clear and redirect
+        if (error instanceof Error && error.message !== 'Current user not found in users list') {
+          sessionStorage.removeItem('lean-coffee-user');
+          sessionStorage.removeItem('lean-coffee-session');
+          window.location.href = '/';
+        }
+        throw error;
+      }
+    }
+  }
+
+  return users;
+}
+
+// Delete user
+export async function deleteUser(userId: string): Promise<void> {
+  const response = await fetch(`/api/users/${userId}`, {
+    method: 'DELETE',
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete user');
+  }
 }
 
 // Fetch discussion history

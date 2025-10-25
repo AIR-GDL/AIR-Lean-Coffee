@@ -6,7 +6,7 @@ import { User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
 import { useUsers } from '@/hooks/useUsers';
-import { createTopic, updateTopic, deleteTopic } from '@/lib/api';
+import { createTopic, updateTopic, deleteTopic, deleteUser } from '@/lib/api';
 import Column from './Column';
 import TopicCard from './TopicCard';
 import Timer from './Timer';
@@ -19,6 +19,7 @@ import HistoryIcon from './icons/HistoryIcon';
 import PeopleIcon from './icons/PeopleIcon';
 import StopIcon from './icons/StopIcon';
 import CheckIcon from './icons/CheckIcon';
+import DeleteIcon from './icons/DeleteIcon';
 import FeedbackMenu from './FeedbackMenu';
 import BugReportModal from './BugReportModal';
 import ChangelogModal from './ChangelogModal';
@@ -76,6 +77,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
   const [showBugReportModal, setShowBugReportModal] = useState(false);
   const [showChangelogModal, setShowChangelogModal] = useState(false);
+  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
+  const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
+  const [isSelectMode, setIsSelectMode] = useState(false);
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -104,10 +108,19 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   }, [initialUser]);
 
   // Update current user when users list changes (vote returns)
+  // Also check if user still exists (wasn't deleted by another session)
   useEffect(() => {
     if (user && users.length > 0) {
       const updatedUser = users.find(u => u.email === user.email);
-      if (updatedUser && updatedUser.votesRemaining !== user.votesRemaining) {
+      
+      // If user was deleted by another session, redirect to register
+      if (!updatedUser) {
+        console.warn('User was deleted from another session');
+        router.push('/');
+        return;
+      }
+      
+      if (updatedUser.votesRemaining !== user.votesRemaining) {
         setUser(updatedUser);
         // Also update sessionStorage
         sessionStorage.setItem('lean-coffee-user', JSON.stringify(updatedUser));
@@ -270,6 +283,41 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to move topic to discussed:', error);
       alert('Failed to move topic. Please try again.');
+    } finally {
+      hideLoader();
+    }
+  };
+
+  const handleToggleParticipantSelection = (userId: string) => {
+    const newSelected = new Set(selectedParticipants);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedParticipants(newSelected);
+  };
+
+  const handleDeleteParticipants = async () => {
+    if (selectedParticipants.size === 0) return;
+
+    showLoader('Deleting participants...');
+    try {
+      // Delete each selected participant
+      for (const userId of selectedParticipants) {
+        await deleteUser(userId);
+      }
+
+      // Refresh users list
+      await mutateUsers();
+      
+      // Clear selection and exit select mode
+      setSelectedParticipants(new Set());
+      setShowDeleteParticipantsModal(false);
+      setIsSelectMode(false);
+    } catch (error) {
+      console.error('Failed to delete participants:', error);
+      alert('Failed to delete participants. Please try again.');
     } finally {
       hideLoader();
     }
@@ -597,17 +645,59 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
                 {/* Participants with scroll */}
                 <div className="flex-1 flex flex-col min-h-0">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2 flex-shrink-0">
-                    <PeopleIcon size={16} />
-                    Participants
-                  </label>
-                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-2">
+                  <div className="flex items-center justify-between mb-2 flex-shrink-0">
+                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                      <PeopleIcon size={16} />
+                      Participants
+                    </label>
+                    {isSelectMode && (
+                      selectedParticipants.size > 0 ? (
+                        <button
+                          onClick={() => setShowDeleteParticipantsModal(true)}
+                          className="p-1 hover:bg-red-100 rounded transition text-red-600"
+                          title="Delete selected participants"
+                        >
+                          <DeleteIcon size={18} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setIsSelectMode(false)}
+                          className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition"
+                        >
+                          Cancel
+                        </button>
+                      )
+                    )}
+                    {!isSelectMode && (
+                      <button
+                        onClick={() => setIsSelectMode(true)}
+                        className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition"
+                      >
+                        Select
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
                     {users.map((participant) => (
                       <div
                         key={participant._id}
-                        className="flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0 flex-shrink-0"
+                        className={`flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0 flex-shrink-0 transition ${
+                          isSelectMode ? 'hover:bg-gray-50 cursor-pointer' : ''
+                        }`}
+                        onClick={() => isSelectMode && handleToggleParticipantSelection(participant._id)}
                       >
-                        <span className="font-medium text-gray-700 truncate">{participant.name}</span>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {isSelectMode && (
+                            <input
+                              type="checkbox"
+                              checked={selectedParticipants.has(participant._id)}
+                              onChange={() => handleToggleParticipantSelection(participant._id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-4 h-4 rounded cursor-pointer"
+                            />
+                          )}
+                          <span className="font-medium text-gray-700 truncate">{participant.name}</span>
+                        </div>
                         <span className="text-xs font-semibold px-2 py-1 rounded flex-shrink-0" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
                           {participant.votesRemaining} vote{participant.votesRemaining !== 1 ? 's' : ''}
                         </span>
@@ -797,6 +887,32 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             </div>
           </>
         )}
+      </Modal>
+
+      {/* Delete Participants Modal */}
+      <Modal
+        isOpen={showDeleteParticipantsModal}
+        onClose={() => setShowDeleteParticipantsModal(false)}
+        title="Delete Participants?"
+      >
+        <p className="mb-6 text-gray-700">
+          Are you sure you want to delete {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''}? This action cannot be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowDeleteParticipantsModal(false)}
+            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleDeleteParticipants}
+            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition"
+            style={{ backgroundColor: '#dc2626' }}
+          >
+            Delete
+          </button>
+        </div>
       </Modal>
 
       {/* Bug Report Modal */}
