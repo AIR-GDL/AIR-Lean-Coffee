@@ -32,7 +32,7 @@ export default function Modal({ isOpen, onClose, title, children, showCloseButto
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={showCloseButton ? onClose : undefined}
       />
-      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 animate-scale-in">
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 animate-scale-in max-h-[90vh]">
         {showCloseButton && (
           <button
             onClick={onClose}

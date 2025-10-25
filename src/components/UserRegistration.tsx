@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { User } from '@/types';
 import { createOrGetUser } from '@/lib/api';
+import { APP_VERSION } from '@/lib/version';
 
 interface UserRegistrationProps {
   onRegister: (user: User) => void;
@@ -123,6 +124,12 @@ export default function UserRegistration({ onRegister }: UserRegistrationProps) 
             {isSubmitting ? 'Registering...' : 'Get Started'}
           </button>
         </form>
+        
+        <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+          <p className="text-xs text-gray-500">
+            AIR Lean Coffee v{APP_VERSION}
+          </p>
+        </div>
       </div>
     </div>
   );
