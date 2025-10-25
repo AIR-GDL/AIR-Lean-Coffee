@@ -7,6 +7,7 @@ export interface ITopic extends Document {
   votes: number;
   votedBy: string[]; // Array of user emails who voted
   status: 'to-discuss' | 'discussing' | 'discussed';
+  archived: boolean; // Whether the topic has been archived
   createdAt: Date;
   discussedAt?: Date;
   totalTimeDiscussed: number; // Total discussion time in seconds
@@ -37,6 +38,10 @@ const TopicSchema = new Schema<ITopic>({
     type: String,
     enum: ['to-discuss', 'discussing', 'discussed'],
     default: 'to-discuss',
+  },
+  archived: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

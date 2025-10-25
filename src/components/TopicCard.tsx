@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Topic, User } from '@/types';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { updateTopic } from '@/lib/api';
 import ThumbUpIcon from './icons/ThumbUpIcon';
-import EditIcon from './icons/EditIcon';
+import ThumbDownIcon from './icons/ThumbDownIcon';
+import ArchiveIcon from './icons/ArchiveIcon';
 import Modal from './Modal';
 
 interface TopicCardProps {
@@ -20,11 +21,15 @@ interface TopicCardProps {
 }
 
 export default function TopicCard({ topic, user, onVote, canVote, isDraggable = true, onUpdate, onDelete }: TopicCardProps) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [editedTitle, setEditedTitle] = useState(topic.title);
   const [editedDescription, setEditedDescription] = useState(topic.description || '');
   const [isSaving, setIsSaving] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleteConfirming, setIsDeleteConfirming] = useState(false);
+  const [deleteCountdown, setDeleteCountdown] = useState(5);
+  const [hasChanges, setHasChanges] = useState(false);
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
 
   const {
     attributes,
@@ -33,13 +38,23 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: topic._id, disabled: !isDraggable || isEditing });
+  } = useSortable({ id: topic._id, disabled: !isDraggable || showModal });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
   };
+
+  // Countdown timer for delete confirmation
+  useEffect(() => {
+    if (isDeleteConfirming && deleteCountdown > 0) {
+      const timer = setTimeout(() => {
+        setDeleteCountdown(deleteCountdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isDeleteConfirming, deleteCountdown]);
 
   const handleVoteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -48,15 +63,26 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
     }
   };
 
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsEditing(true);
+  const handleCardClick = () => {
+    setShowModal(true);
     setEditedTitle(topic.title);
     setEditedDescription(topic.description || '');
+    setHasChanges(false);
+    setIsDeleteConfirming(false);
+    setDeleteCountdown(5);
   };
 
-  const handleSave = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleTitleChange = (value: string) => {
+    setEditedTitle(value);
+    setHasChanges(value !== topic.title || editedDescription !== (topic.description || ''));
+  };
+
+  const handleDescriptionChange = (value: string) => {
+    setEditedDescription(value);
+    setHasChanges(editedTitle !== topic.title || value !== (topic.description || ''));
+  };
+
+  const handleSave = async () => {
     if (!editedTitle.trim() || isSaving) return;
 
     setIsSaving(true);
@@ -65,7 +91,8 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
         title: editedTitle.trim(),
         description: editedDescription.trim()
       });
-      setIsEditing(false);
+      setShowModal(false);
+      setHasChanges(false);
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Failed to update topic:', error);
@@ -75,20 +102,38 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
     }
   };
 
-  const handleCancel = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setIsEditing(false);
+  const handleCloseModal = () => {
+    setShowModal(false);
     setEditedTitle(topic.title);
     setEditedDescription(topic.description || '');
-    setShowDeleteConfirm(false);
+    setHasChanges(false);
+    setIsDeleteConfirming(false);
+    setDeleteCountdown(5);
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDeleteClick = () => {
+    setIsDeleteConfirming(true);
+    setDeleteCountdown(5);
+  };
+
+  const handleConfirmDelete = async () => {
     if (onDelete) {
       onDelete(topic._id);
-      setShowDeleteConfirm(false);
-      setIsEditing(false);
+      setShowModal(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    setIsArchiving(true);
+    try {
+      await updateTopic(topic._id, { archived: true });
+      setShowArchiveConfirm(false);
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error('Failed to archive topic:', error);
+      alert('Failed to archive topic. Please try again.');
+    } finally {
+      setIsArchiving(false);
     }
   };
 
@@ -96,161 +141,227 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
   const canEdit = topic.status === 'to-discuss';
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...(isDraggable ? listeners : {})}
-      className={`bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:shadow-lg transition-shadow ${
-        isDraggable ? 'cursor-grab active:cursor-grabbing' : ''
-      } ${isDragging ? 'z-50' : ''}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          {isEditing ? (
-            <div className="space-y-2">
-              <input
-                type="text"
-                value={editedTitle}
-                onChange={(e) => setEditedTitle(e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent font-semibold overflow-hidden truncate"
-                placeholder="Topic title"
-                autoFocus
-              />
-              <textarea
-                value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
-                className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-2 focus:border-transparent resize-none overflow-hidden"
-                rows={3}
-                placeholder="Description (optional)"
-              />
-              <div className="flex gap-2">
+    <>
+      <div
+        ref={setNodeRef}
+        style={style}
+        {...attributes}
+        {...(isDraggable ? listeners : {})}
+        onClick={handleCardClick}
+        className={`bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:shadow-lg transition-shadow ${
+          isDraggable ? 'cursor-grab active:cursor-grabbing hover:cursor-pointer' : 'cursor-pointer'
+        } ${isDragging ? 'z-50' : ''}`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-gray-900 mb-1 truncate break-words">
+              {topic.title}
+            </h3>
+            {topic.description && (
+              <p className="text-sm text-gray-600 line-clamp-2 break-words">
+                {topic.description}
+              </p>
+            )}
+            <p className="text-xs text-gray-500 mt-1">
+              by {topic.author}
+            </p>
+          </div>
+          
+          {/* Vote Button - "to-discuss" */}
+          {topic.status === 'to-discuss' && (
+            <button
+              onClick={handleVoteClick}
+              disabled={!canVote && !hasUserVoted}
+              className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-xs transition-all duration-300 group ${
+                hasUserVoted
+                  ? 'bg-blue-100 text-blue-600 hover:bg-red-600 hover:text-white cursor-pointer'
+                  : canVote
+                  ? 'bg-gray-200 text-gray-600 hover:text-white cursor-pointer'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+              style={
+                hasUserVoted
+                  ? { backgroundColor: '#e6f2f9', color: '#005596' }
+                  : {}
+              }
+              onMouseEnter={(e) => {
+                if ((canVote && !hasUserVoted) || hasUserVoted) {
+                  if (hasUserVoted) {
+                    e.currentTarget.style.backgroundColor = '#dc2626';
+                    e.currentTarget.style.color = 'white';
+                  } else {
+                    e.currentTarget.style.backgroundColor = '#005596';
+                    e.currentTarget.style.color = 'white';
+                  }
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (hasUserVoted) {
+                  e.currentTarget.style.backgroundColor = '#e6f2f9';
+                  e.currentTarget.style.color = '#005596';
+                } else if (canVote && !hasUserVoted) {
+                  e.currentTarget.style.backgroundColor = '';
+                  e.currentTarget.style.color = '';
+                }
+              }}
+              title={hasUserVoted ? 'Click to remove your vote' : 'Click to vote'}
+            >
+              {/* Compact view: only number */}
+              <span className="group-hover:hidden transition-opacity duration-300">{topic.votes}</span>
+              
+              {/* Expanded view: only icon */}
+              <span className="hidden group-hover:flex items-center justify-center transition-opacity duration-300">
+                {hasUserVoted ? (
+                  <ThumbDownIcon size={14} filled={true} />
+                ) : (
+                  <ThumbUpIcon size={14} filled={false} />
+                )}
+              </span>
+            </button>
+          )}
+          
+          {/* Archive Button - "discussed" */}
+          {topic.status === 'discussed' && !topic.archived && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowArchiveConfirm(true);
+              }}
+              className="flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:text-white transition-all duration-300 group bg-gray-200 hover:bg-blue-600 cursor-pointer"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#005596';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '';
+              }}
+              title="Archive topic"
+            >
+              <ArchiveIcon size={16} />
+            </button>
+          )}
+          
+          {topic.status !== 'to-discuss' && topic.status !== 'discussed' && topic.votes > 0 && (
+            <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-sm">
+              <ThumbUpIcon size={16} />
+              <span>{topic.votes}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={handleCloseModal}
+        title="Topic Details"
+      >
+        <div className="space-y-4">
+          {!isDeleteConfirming ? (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Topic title"
+                  disabled={!canEdit}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description
+                </label>
+                <textarea
+                  value={editedDescription}
+                  onChange={(e) => handleDescriptionChange(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  rows={4}
+                  placeholder="Description (optional)"
+                  disabled={!canEdit}
+                />
+              </div>
+
+              <div className="flex gap-3 justify-end pt-4 border-t">
+                {canEdit && (
+                  <>
+                    <button
+                      onClick={handleDeleteClick}
+                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={handleSave}
+                      disabled={!hasChanges || isSaving}
+                      className="px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-400 transition"
+                      style={{ backgroundColor: hasChanges && !isSaving ? '#005596' : undefined }}
+                    >
+                      {isSaving ? 'Saving...' : 'Save'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-gray-700 font-medium">
+                Really want to delete this topic?
+              </p>
+              <div className="flex gap-3 justify-end pt-4 border-t">
                 <button
-                  onClick={handleCancel}
-                  className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                  onClick={() => {
+                    setIsDeleteConfirming(false);
+                    setDeleteCountdown(5);
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleSave}
-                  disabled={!editedTitle.trim() || isSaving}
-                  className="px-3 py-1.5 text-white text-xs rounded hover:opacity-90 disabled:bg-gray-400"
-                  style={{ backgroundColor: editedTitle.trim() && !isSaving ? '#005596' : undefined }}
+                  onClick={handleConfirmDelete}
+                  disabled={deleteCountdown > 0}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition"
                 >
-                  {isSaving ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowDeleteConfirm(true);
-                  }}
-                  className="px-3 py-1.5 bg-red-100 text-red-700 text-xs rounded hover:bg-red-200 ml-auto"
-                >
-                  Delete
+                  {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : 'Confirm Delete'}
                 </button>
               </div>
             </div>
-          ) : (
-            <>
-              <div className="flex items-start justify-between gap-2 min-w-0">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 mb-1 truncate break-words">
-                    {topic.title}
-                  </h3>
-                  {topic.description && (
-                    <p className="text-sm text-gray-600 line-clamp-2 break-words">
-                      {topic.description}
-                    </p>
-                  )}
-                </div>
-                {canEdit && (
-                  <button
-                    onClick={handleEditClick}
-                    className="p-1 text-gray-400 hover:text-gray-600 transition flex-shrink-0"
-                    title="Edit topic"
-                  >
-                    <EditIcon size={16} />
-                  </button>
-                )}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                by {topic.author}
-              </p>
-            </>
           )}
         </div>
-        
-        {!isEditing && topic.status === 'to-discuss' && (
-          <button
-            onClick={handleVoteClick}
-            disabled={!canVote && !hasUserVoted}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-full font-semibold text-sm transition-all ${
-              hasUserVoted
-                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 cursor-pointer'
-                : canVote
-                ? 'bg-gray-100 text-gray-700 hover:text-white'
-                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-            }`}
-            style={hasUserVoted ? { backgroundColor: '#e6f2f9', color: '#005596' } : {}}
-            onMouseEnter={(e) => {
-              if ((canVote && !hasUserVoted) || hasUserVoted) {
-                e.currentTarget.style.backgroundColor = '#005596';
-                e.currentTarget.style.color = 'white';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (hasUserVoted) {
-                e.currentTarget.style.backgroundColor = '#e6f2f9';
-                e.currentTarget.style.color = '#005596';
-              } else if (canVote && !hasUserVoted) {
-                e.currentTarget.style.backgroundColor = '';
-                e.currentTarget.style.color = '';
-              }
-            }}
-            title={hasUserVoted ? 'Click to remove your vote' : 'Click to vote'}
-          >
-            <ThumbUpIcon size={16} filled={hasUserVoted} />
-            <span>{topic.votes}</span>
-          </button>
-        )}
-        
-        {!isEditing && topic.status !== 'to-discuss' && topic.votes > 0 && (
-          <div className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-sm">
-            <ThumbUpIcon size={16} />
-            <span>{topic.votes}</span>
-          </div>
-        )}
-      </div>
+      </Modal>
 
-      {/* Delete Confirmation Modal */}
+      {/* Archive Confirmation Modal */}
       <Modal
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        title="Delete Topic"
+        isOpen={showArchiveConfirm}
+        onClose={() => setShowArchiveConfirm(false)}
+        title="Archive Topic"
       >
         <div className="space-y-4">
           <p className="text-gray-700">
-            Are you sure you want to delete this topic permanently? This action cannot be undone.
+            Are you sure you want to archive this topic? It will no longer appear in the Discussed column.
           </p>
-          <div className="flex gap-3 justify-end">
+          <div className="flex gap-3 justify-end pt-4 border-t">
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowDeleteConfirm(false);
-              }}
+              onClick={() => setShowArchiveConfirm(false)}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
             >
               Cancel
             </button>
             <button
-              onClick={handleDelete}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+              onClick={handleArchive}
+              disabled={isArchiving}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition"
             >
-              Confirm Delete
+              {isArchiving ? 'Archiving...' : 'Archive'}
             </button>
           </div>
         </div>
       </Modal>
-    </div>
+    </>
   );
 }

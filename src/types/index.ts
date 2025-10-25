@@ -15,6 +15,7 @@ export interface Topic {
   votes: number;
   votedBy: string[]; // Array of user emails who voted
   status: 'to-discuss' | 'discussing' | 'discussed';
+  archived: boolean; // Whether the topic has been archived
   createdAt: string;
   discussedAt?: string;
   totalTimeDiscussed: number; // Total discussion time in seconds
@@ -57,4 +58,5 @@ export interface UpdateTopicRequest {
   title?: string;
   description?: string;
   totalTimeDiscussed?: number;
+  archived?: boolean;
 }

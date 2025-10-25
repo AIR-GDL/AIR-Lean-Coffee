@@ -131,7 +131,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
-    return topics.filter(topic => topic.status === dbStatus);
+    return topics.filter(topic => topic.status === dbStatus && !topic.archived);
   };
 
   const handleAddTopic = async () => {

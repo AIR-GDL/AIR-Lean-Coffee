@@ -24,6 +24,21 @@ export default function Modal({ isOpen, onClose, title, children, showCloseButto
     };
   }, [isOpen]);
 
+  // Handle ESC key to close modal
+  useEffect(() => {
+    if (!isOpen || !showCloseButton) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, showCloseButton, onClose]);
+
   if (!isOpen) return null;
 
   return (
@@ -36,7 +51,8 @@ export default function Modal({ isOpen, onClose, title, children, showCloseButto
         {showCloseButton && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition"
+            className="absolute top-4 right-4 p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            title="Close"
           >
             <CloseIcon size={24} />
           </button>
