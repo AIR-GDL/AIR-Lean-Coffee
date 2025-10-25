@@ -24,7 +24,7 @@ export async function PUT(
         );
       }
 
-      // Find the user and check if they have votes remaining
+      // Find the user
       const user = await User.findOne({ email: userEmail.toLowerCase() });
 
       if (!user) {
@@ -34,14 +34,7 @@ export async function PUT(
         );
       }
 
-      if (user.votesRemaining <= 0) {
-        return NextResponse.json(
-          { error: 'No votes remaining' },
-          { status: 400 }
-        );
-      }
-
-      // Find topic and check if user already voted
+      // Find topic
       const topic = await Topic.findById(id);
 
       if (!topic) {
@@ -51,22 +44,36 @@ export async function PUT(
         );
       }
 
-      // Check if user already voted on this topic
-      if (topic.votedBy.includes(userEmail.toLowerCase())) {
-        return NextResponse.json(
-          { error: 'You have already voted on this topic' },
-          { status: 400 }
-        );
+      // Check if user already voted on this topic (toggle vote)
+      const userEmailLower = userEmail.toLowerCase();
+      const hasVoted = topic.votedBy.includes(userEmailLower);
+
+      if (hasVoted) {
+        // Remove vote (toggle off) - always allowed
+        topic.votes -= 1;
+        topic.votedBy = topic.votedBy.filter(email => email !== userEmailLower);
+        await topic.save();
+
+        // Return vote to user
+        user.votesRemaining += 1;
+        await user.save();
+      } else {
+        // Add vote (toggle on) - only if votes remaining
+        if (user.votesRemaining <= 0) {
+          return NextResponse.json(
+            { error: 'No votes remaining' },
+            { status: 400 }
+          );
+        }
+
+        topic.votes += 1;
+        topic.votedBy.push(userEmailLower);
+        await topic.save();
+
+        // Decrement user's remaining votes
+        user.votesRemaining -= 1;
+        await user.save();
       }
-
-      // Increment topic votes and add user to votedBy array
-      topic.votes += 1;
-      topic.votedBy.push(userEmail.toLowerCase());
-      await topic.save();
-
-      // Decrement user's remaining votes
-      user.votesRemaining -= 1;
-      await user.save();
 
       return NextResponse.json({ topic, user }, { status: 200 });
     }

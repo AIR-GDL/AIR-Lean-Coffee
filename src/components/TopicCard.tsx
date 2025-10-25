@@ -43,7 +43,7 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
 
   const handleVoteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (canVote) {
+    if (canVote || hasUserVoted) {
       onVote(topic._id);
     }
   };
@@ -183,25 +183,31 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
         {!isEditing && topic.status === 'to-discuss' && (
           <button
             onClick={handleVoteClick}
-            disabled={!canVote || hasUserVoted}
+            disabled={!canVote && !hasUserVoted}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-full font-semibold text-sm transition-all ${
               hasUserVoted
-                ? 'cursor-not-allowed'
+                ? 'bg-blue-100 text-blue-600 hover:bg-blue-200 cursor-pointer'
                 : canVote
                 ? 'bg-gray-100 text-gray-700 hover:text-white'
                 : 'bg-gray-100 text-gray-400 cursor-not-allowed'
             }`}
             style={hasUserVoted ? { backgroundColor: '#e6f2f9', color: '#005596' } : {}}
             onMouseEnter={(e) => {
-              if (canVote && !hasUserVoted) {
+              if ((canVote && !hasUserVoted) || hasUserVoted) {
                 e.currentTarget.style.backgroundColor = '#005596';
+                e.currentTarget.style.color = 'white';
               }
             }}
             onMouseLeave={(e) => {
-              if (canVote && !hasUserVoted) {
+              if (hasUserVoted) {
+                e.currentTarget.style.backgroundColor = '#e6f2f9';
+                e.currentTarget.style.color = '#005596';
+              } else if (canVote && !hasUserVoted) {
                 e.currentTarget.style.backgroundColor = '';
+                e.currentTarget.style.color = '';
               }
             }}
+            title={hasUserVoted ? 'Click to remove your vote' : 'Click to vote'}
           >
             <ThumbUpIcon size={16} filled={hasUserVoted} />
             <span>{topic.votes}</span>

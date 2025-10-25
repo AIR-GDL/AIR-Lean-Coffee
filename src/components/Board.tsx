@@ -147,12 +147,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleVote = async (topicId: string) => {
-    if (user.votesRemaining <= 0) {
-      alert('No votes remaining!');
-      return;
-    }
-
-    showLoader('Voting...');
     try {
       const response = await updateTopic(topicId, {
         action: 'VOTE',
@@ -168,8 +162,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to vote:', error);
       alert(error instanceof Error ? error.message : 'Failed to vote. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 

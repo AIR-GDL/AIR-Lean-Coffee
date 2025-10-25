@@ -68,6 +68,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, on
                         user={user}
                         onVote={onVote}
                         canVote={canVote}
+                        isDraggable={true}
                         onUpdate={onUpdate}
                         onDelete={onDelete}
                       />
