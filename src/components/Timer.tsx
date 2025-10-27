@@ -11,6 +11,8 @@ interface TimerProps {
 export default function Timer({ remainingSeconds, onTimeUp }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(remainingSeconds);
 
+  console.log('Timer component received remainingSeconds:', remainingSeconds);
+
   useEffect(() => {
     setTimeLeft(remainingSeconds);
   }, [remainingSeconds]);

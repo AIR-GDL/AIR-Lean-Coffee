@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -67,6 +67,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     pausedRemainingSeconds: null,
   });
 
+  console.log('Board initialized with timer settings:', timerSettings);
+
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showAddTopicModal, setShowAddTopicModal] = useState(false);
   const [showConfirmDiscussModal, setShowConfirmDiscussModal] = useState(false);
@@ -129,6 +131,73 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users]);
 
+  // Restore timer if a topic is currently being discussed
+  useEffect(() => {
+    if (isLoading || topics.length === 0) {
+      return;
+    }
+
+    const discussingTopic = topics.find(t => t.status === 'discussing');
+
+    if (!discussingTopic || !discussingTopic.discussionStartTime || !discussingTopic.discussionDurationMinutes) {
+      // If there's no discussing topic or missing data, reset timer
+      setTimerSettings({
+        durationMinutes: 5,
+        isRunning: false,
+        startTime: null,
+        remainingSeconds: null,
+        currentTopicId: null,
+        isPaused: false,
+        pausedRemainingSeconds: null,
+      });
+      return;
+    }
+
+    const now = Date.now();
+    const totalMs = discussingTopic.discussionDurationMinutes * 60 * 1000;
+    const elapsedMs = now - discussingTopic.discussionStartTime;
+    const remainingMs = Math.max(0, totalMs - elapsedMs);
+    const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+    setTimerSettings((previous) => {
+      // Always update if there's a discussing topic - force consistency
+      const shouldUpdate =
+        previous.currentTopicId !== discussingTopic._id ||
+        previous.durationMinutes !== discussingTopic.discussionDurationMinutes ||
+        previous.startTime !== discussingTopic.discussionStartTime ||
+        previous.remainingSeconds === null ||
+        previous.isPaused ||
+        !previous.isRunning ||
+        Math.abs((previous.remainingSeconds ?? 0) - remainingSeconds) > 5; // More aggressive threshold
+
+      if (!shouldUpdate) {
+        return previous;
+      }
+
+      if (remainingMs <= 0) {
+        return {
+          durationMinutes: discussingTopic.discussionDurationMinutes || 0,
+          isRunning: false,
+          isPaused: true,
+          startTime: discussingTopic.discussionStartTime || null,
+          remainingSeconds: 0,
+          pausedRemainingSeconds: 0,
+          currentTopicId: discussingTopic._id,
+        };
+      }
+
+      return {
+        durationMinutes: discussingTopic.discussionDurationMinutes || 0,
+        isRunning: true,
+        isPaused: false,
+        startTime: now - elapsedMs,
+        remainingSeconds,
+        pausedRemainingSeconds: null,
+        currentTopicId: discussingTopic._id,
+      };
+    });
+  }, [isLoading, topics, setTimerSettings]);
+
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
     return topics.filter(topic => topic.status === dbStatus && !topic.archived);
@@ -138,7 +207,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!newTopicTitle.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
-    showLoader('Creating topic...');
     try {
       await createTopic({
         title: newTopicTitle.trim(),
@@ -202,7 +270,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleDeleteTopic = async (topicId: string) => {
-    showLoader('Deleting topic...');
     try {
       await deleteTopic(topicId);
       await mutate(); // Refresh topics
@@ -249,8 +316,27 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     // Allow moving between "discussing" and "discussed" columns
     if (targetColumnId === 'discussed') {
       if (topic.status === 'discussing') {
-        // Allow moving from discussing to discussed (manual move)
-        handleMoveToDiscussed(topicId);
+        // If timer is running, show voting modal (finish early)
+        if (timerSettings.isRunning && timerSettings.currentTopicId === topicId) {
+          // Calculate current remaining time
+          const elapsedMs = Date.now() - (timerSettings.startTime || 0);
+          const totalMs = timerSettings.durationMinutes * 60 * 1000;
+          const remainingMs = Math.max(0, totalMs - elapsedMs);
+          const remainingSeconds = Math.ceil(remainingMs / 1000);
+          
+          // Pause timer temporarily with calculated remaining time
+          setTimerSettings({
+            ...timerSettings,
+            isPaused: true,
+            pausedRemainingSeconds: remainingSeconds,
+            remainingSeconds: remainingSeconds,
+          });
+          // Show voting modal
+          setShowVotingModal(true);
+        } else {
+          // Allow moving from discussing to discussed (manual move)
+          handleMoveToDiscussed(topicId);
+        }
       }
       return;
     }
@@ -262,7 +348,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleMoveToDiscussed = async (topicId: string) => {
-    showLoader('Moving topic...');
     try {
       const topic = topics.find(t => t._id === topicId);
       if (!topic) return;
@@ -301,7 +386,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const handleDeleteParticipants = async () => {
     if (selectedParticipants.size === 0) return;
 
-    showLoader('Deleting participants...');
     try {
       // Delete each selected participant
       for (const userId of selectedParticipants) {
@@ -327,18 +411,26 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!pendingTopicMove) return;
 
     const { topicId } = pendingTopicMove;
+    const now = Date.now();
     
-    showLoader('Starting discussion...');
+    console.log('Starting discussion with values:', {
+      topicId,
+      now,
+      durationMinutes: timerSettings.durationMinutes
+    });
+    
     try {
       await updateTopic(topicId, {
         status: 'discussing',
+        discussionStartTime: now,
+        discussionDurationMinutes: timerSettings.durationMinutes,
       });
 
       // Start timer
       setTimerSettings({
         ...timerSettings,
         isRunning: true,
-        startTime: Date.now(),
+        startTime: now,
         remainingSeconds: timerSettings.durationMinutes * 60,
         currentTopicId: topicId,
       });
@@ -373,7 +465,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     // For now, we'll simulate immediate action
     setTimeout(async () => {
       if (vote === 'finish') {
-        showLoader('Finishing topic...');
         // Move topic to discussed
         const currentTopicId = timerSettings.currentTopicId;
         if (currentTopicId && timerSettings.startTime) {
@@ -410,7 +501,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           pausedRemainingSeconds: null,
         });
       } else {
-        showLoader('Continuing discussion...');
         // Continue discussion
         if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
           if (timerSettings.pausedRemainingSeconds === 0) {
@@ -419,13 +509,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             hideLoader();
             return; // Exit early, don't close modal
           } else {
-            // Finish early was clicked - resume from paused time
-            // Keep original startTime to track total duration
+            // Resume from paused time - continue where it was paused
+            // Calculate new startTime to maintain the remaining seconds
+            const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
             setTimerSettings({
               ...timerSettings,
               isRunning: true,
               isPaused: false,
-              // Keep original startTime to track total duration from start
+              startTime: newStartTime,
               remainingSeconds: timerSettings.pausedRemainingSeconds,
               pausedRemainingSeconds: null,
             });
@@ -811,9 +902,26 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       {/* Voting Modal */}
       <Modal
         isOpen={showVotingModal}
-        onClose={() => {}}
+        onClose={() => {
+          // Resume timer if it was paused
+          if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
+            // Calculate new startTime to maintain the remaining seconds
+            const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
+            setTimerSettings({
+              ...timerSettings,
+              isRunning: true,
+              isPaused: false,
+              startTime: newStartTime,
+              remainingSeconds: timerSettings.pausedRemainingSeconds,
+              pausedRemainingSeconds: null,
+            });
+          }
+          setShowVotingModal(false);
+          setUserVote(null);
+          setShowAddTimeSlider(false);
+        }}
         title={showAddTimeSlider ? "Add More Time" : "Time's Up! Vote on Next Action"}
-        showCloseButton={false}
+        showCloseButton={true}
       >
         {showAddTimeSlider ? (
           // Add time slider UI

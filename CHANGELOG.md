@@ -2,6 +2,34 @@
 
 All notable changes to AIR Lean Coffee will be documented in this file.
 
+## [1.4.0] - 25 Oct 2025
+
+### Added
+- Topic archiving system for discussed topics
+- Archive icon button in discussed column
+- Modal confirmation for archiving topics
+- User deletion with session cleanup and automatic redirect
+- Improved card UI with modal-based editing
+- Compact vote button with hover expansion
+- Archive button with icon display
+
+### Improved
+- Card editing moved to modal interface
+- Vote button redesigned with dynamic icons (thumbs up/down)
+- Delete confirmation with countdown timer (5 seconds)
+- Modal UI consistency with header buttons
+- ESC key support for closing all modals
+- Responsive button styling with smooth animations
+- Better visual feedback for user interactions
+
+### Technical
+- Added `archived` property to Topic model
+- Implemented user validation on session detection
+- Session storage cleanup on user deletion
+- Google Material Icons for all buttons (thumbs up/down, archive)
+- Smooth 300ms transitions for all button interactions
+- Improved modal button styling consistency
+
 ## [1.3.0] - 25 Oct 2025
 
 ### Added

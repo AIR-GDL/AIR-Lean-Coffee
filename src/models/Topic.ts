@@ -10,6 +10,8 @@ export interface ITopic extends Document {
   archived: boolean; // Whether the topic has been archived
   createdAt: Date;
   discussedAt?: Date;
+  discussionStartTime?: number; // Timestamp when discussion started (for timer recovery)
+  discussionDurationMinutes?: number; // Duration in minutes when discussion started (for timer recovery)
   totalTimeDiscussed: number; // Total discussion time in seconds
 }
 
@@ -49,6 +51,12 @@ const TopicSchema = new Schema<ITopic>({
   },
   discussedAt: {
     type: Date,
+  },
+  discussionStartTime: {
+    type: Number,
+  },
+  discussionDurationMinutes: {
+    type: Number,
   },
   totalTimeDiscussed: {
     type: Number,

@@ -80,7 +80,7 @@ export async function PUT(
 
     // Check if this is a status change
     if (body.status) {
-      const { status } = body;
+      const { status, discussionStartTime, discussionDurationMinutes } = body;
 
       if (!['to-discuss', 'discussing', 'discussed'].includes(status)) {
         return NextResponse.json(
@@ -114,6 +114,16 @@ export async function PUT(
 
       // Update status
       topic.status = status;
+      
+      // Update discussionStartTime if provided (when changing to 'discussing')
+      if (discussionStartTime !== undefined) {
+        topic.discussionStartTime = discussionStartTime;
+      }
+      
+      // Update discussionDurationMinutes if provided (when changing to 'discussing')
+      if (discussionDurationMinutes !== undefined) {
+        topic.discussionDurationMinutes = discussionDurationMinutes;
+      }
       
       // Update totalTimeDiscussed if provided
       if (body.totalTimeDiscussed !== undefined) {
