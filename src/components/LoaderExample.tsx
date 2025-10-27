@@ -13,7 +13,6 @@ export default function LoaderExample() {
   const handleWithLoader = async () => {
     await withLoader('Procesando con withLoader...', async () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('Operación completada');
     });
   };
 
@@ -22,7 +21,6 @@ export default function LoaderExample() {
     showLoader('Procesando manualmente...');
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
-      console.log('Operación completada');
     } finally {
       hideLoader();
     }

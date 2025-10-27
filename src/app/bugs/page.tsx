@@ -31,6 +31,7 @@ export default function BugsPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [deletingBugId, setDeletingBugId] = useState<string | null>(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [editForm, setEditForm] = useState<{
     title: string;
     description: string;
@@ -49,8 +50,15 @@ export default function BugsPage() {
   });
 
   useEffect(() => {
+    // Check authentication
+    const storedUser = sessionStorage.getItem('lean-coffee-user');
+    if (!storedUser) {
+      router.push('/');
+      return;
+    }
+    setIsAuthenticated(true);
     fetchBugs();
-  }, []);
+  }, [router]);
 
   const fetchBugs = async () => {
     try {
@@ -162,6 +170,10 @@ export default function BugsPage() {
       return matchesSeverity && matchesStatus && matchesSearch;
     });
   }, [bugs, filters]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 p-4">

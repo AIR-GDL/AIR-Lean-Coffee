@@ -12,10 +12,18 @@ export default function HistoryPage() {
   const router = useRouter();
   const [history, setHistory] = useState<Topic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
+    // Check authentication
+    const storedUser = sessionStorage.getItem('lean-coffee-user');
+    if (!storedUser) {
+      router.push('/');
+      return;
+    }
+    setIsAuthenticated(true);
     loadHistory();
-  }, []);
+  }, [router]);
 
   const loadHistory = async () => {
     try {
@@ -40,6 +48,10 @@ export default function HistoryPage() {
       hour12: true,
     });
   };
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   if (isLoading) {
     return (
