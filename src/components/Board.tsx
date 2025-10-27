@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -67,8 +67,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     pausedRemainingSeconds: null,
   });
 
-  console.log('Board initialized with timer settings:', timerSettings);
-
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showAddTopicModal, setShowAddTopicModal] = useState(false);
   const [showConfirmDiscussModal, setShowConfirmDiscussModal] = useState(false);
@@ -86,6 +84,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Track if timer has been restored to avoid infinite loops
+  const timerRestoredRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -134,22 +135,31 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   // Restore timer if a topic is currently being discussed
   useEffect(() => {
     if (isLoading || topics.length === 0) {
+      timerRestoredRef.current = false;
       return;
     }
 
     const discussingTopic = topics.find(t => t.status === 'discussing');
 
+    // Only restore timer once per discussing topic
+    if (timerRestoredRef.current && timerSettings.currentTopicId === discussingTopic?._id) {
+      return;
+    }
+
     if (!discussingTopic || !discussingTopic.discussionStartTime || !discussingTopic.discussionDurationMinutes) {
-      // If there's no discussing topic or missing data, reset timer
-      setTimerSettings({
-        durationMinutes: 5,
-        isRunning: false,
-        startTime: null,
-        remainingSeconds: null,
-        currentTopicId: null,
-        isPaused: false,
-        pausedRemainingSeconds: null,
-      });
+      // If there's no discussing topic or missing data, reset timer only once
+      if (!timerRestoredRef.current) {
+        setTimerSettings({
+          durationMinutes: 5,
+          isRunning: false,
+          startTime: null,
+          remainingSeconds: null,
+          currentTopicId: null,
+          isPaused: false,
+          pausedRemainingSeconds: null,
+        });
+        timerRestoredRef.current = true;
+      }
       return;
     }
 
@@ -159,34 +169,18 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const remainingMs = Math.max(0, totalMs - elapsedMs);
     const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
 
-    setTimerSettings((previous) => {
-      // Always update if there's a discussing topic - force consistency
-      const shouldUpdate =
-        previous.currentTopicId !== discussingTopic._id ||
-        previous.durationMinutes !== discussingTopic.discussionDurationMinutes ||
-        previous.startTime !== discussingTopic.discussionStartTime ||
-        previous.remainingSeconds === null ||
-        previous.isPaused ||
-        !previous.isRunning ||
-        Math.abs((previous.remainingSeconds ?? 0) - remainingSeconds) > 5; // More aggressive threshold
-
-      if (!shouldUpdate) {
-        return previous;
-      }
-
-      if (remainingMs <= 0) {
-        return {
-          durationMinutes: discussingTopic.discussionDurationMinutes || 0,
-          isRunning: false,
-          isPaused: true,
-          startTime: discussingTopic.discussionStartTime || null,
-          remainingSeconds: 0,
-          pausedRemainingSeconds: 0,
-          currentTopicId: discussingTopic._id,
-        };
-      }
-
-      return {
+    if (remainingMs <= 0) {
+      setTimerSettings({
+        durationMinutes: discussingTopic.discussionDurationMinutes || 0,
+        isRunning: false,
+        isPaused: true,
+        startTime: discussingTopic.discussionStartTime || null,
+        remainingSeconds: 0,
+        pausedRemainingSeconds: 0,
+        currentTopicId: discussingTopic._id,
+      });
+    } else {
+      setTimerSettings({
         durationMinutes: discussingTopic.discussionDurationMinutes || 0,
         isRunning: true,
         isPaused: false,
@@ -194,9 +188,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         remainingSeconds,
         pausedRemainingSeconds: null,
         currentTopicId: discussingTopic._id,
-      };
-    });
-  }, [isLoading, topics, setTimerSettings]);
+      });
+    }
+
+    timerRestoredRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, topics]);
 
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
@@ -412,12 +409,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
     const { topicId } = pendingTopicMove;
     const now = Date.now();
-    
-    console.log('Starting discussion with values:', {
-      topicId,
-      now,
-      durationMinutes: timerSettings.durationMinutes
-    });
     
     try {
       await updateTopic(topicId, {
@@ -723,7 +714,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     max="20"
                     value={timerSettings.durationMinutes}
                     onChange={(e) => setTimerSettings({ ...timerSettings, durationMinutes: parseInt(e.target.value) })}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    className={`w-full h-2 bg-gray-200 rounded-lg appearance-none ${timerSettings.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     style={{ accentColor: '#005596' }}
                     disabled={timerSettings.isRunning}
                   />
