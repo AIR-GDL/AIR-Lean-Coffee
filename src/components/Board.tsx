@@ -22,6 +22,9 @@ import CheckIcon from './icons/CheckIcon';
 import DeleteIcon from './icons/DeleteIcon';
 import MaterialSymbol from './icons/MaterialSymbol';
 import ShieldIcon from './icons/ShieldIcon';
+import ThumbsDownIcon from './icons/ThumbsDownIcon';
+import ThumbsUpIcon from './icons/ThumbsUpIcon';
+import EqualIcon from './icons/EqualIcon';
 import FeedbackMenu from './FeedbackMenu';
 import BugReportModal from './BugReportModal';
 import ChangelogModal from './ChangelogModal';
@@ -84,6 +87,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
   const [showBugReportModal, setShowBugReportModal] = useState(false);
   const [showChangelogModal, setShowChangelogModal] = useState(false);
+  const [hoveredVote, setHoveredVote] = useState<'against' | 'neutral' | 'favor' | null>(null);
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
   const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
@@ -95,6 +99,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   
   // Track if timer has been restored to avoid infinite loops
   const timerRestoredRef = useRef(false);
+  const respondedToSyncRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -118,17 +123,72 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     setUser(initialUser);
   }, [initialUser]);
 
+  const sendUserLeftEvent = useCallback((userId: string | undefined) => {
+    if (!userId) return;
+
+    try {
+      if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+        const payload = JSON.stringify({
+          event: 'user-left',
+          data: { userId },
+          channel: 'users',
+        });
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon('/api/pusher/users', blob);
+      } else {
+        void triggerUserEvent('user-left', { userId });
+      }
+    } catch (error) {
+      console.error('Failed to send user-left beacon:', error);
+      void triggerUserEvent('user-left', { userId });
+    }
+  }, []);
+
   // Trigger user-joined event when user loads and user-left when unmounts
   useEffect(() => {
     if (initialUser?._id) {
-      triggerUserEvent('user-joined', { user: initialUser });
+      respondedToSyncRef.current = false;
+      triggerUserEvent('user-joined', { user: initialUser, requestSync: true });
+
+      const handleBeforeUnload = () => {
+        sendUserLeftEvent(initialUser._id);
+      };
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') {
+          sendUserLeftEvent(initialUser._id);
+          setOnlineUsers(prev => {
+            const newSet = new Set(prev);
+            if (initialUser._id) {
+              newSet.delete(initialUser._id);
+            }
+            return newSet;
+          });
+        } else if (document.visibilityState === 'visible') {
+          respondedToSyncRef.current = false;
+          if (initialUser?._id) {
+            setOnlineUsers(prev => new Set([...prev, initialUser._id]));
+            triggerUserEvent('user-online', { user: initialUser });
+          }
+        }
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       // Cleanup: trigger user-left when component unmounts
       return () => {
-        triggerUserEvent('user-left', { userId: initialUser._id });
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        sendUserLeftEvent(initialUser._id);
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(initialUser._id);
+          return newSet;
+        });
       };
     }
-  }, [initialUser?._id]);
+  }, [initialUser?._id, sendUserLeftEvent]);
 
   // Update current user when users list changes (vote returns)
   // Also check if user still exists (wasn't deleted by another session)
@@ -143,7 +203,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         return;
       }
       
-      if (updatedUser.votesRemaining !== user.votesRemaining) {
+      // Update if votes or roles changed
+      if (updatedUser.votesRemaining !== user.votesRemaining || 
+          JSON.stringify(updatedUser.roles) !== JSON.stringify(user.roles)) {
         setUser(updatedUser);
         // Also update sessionStorage
         sessionStorage.setItem('lean-coffee-user', JSON.stringify(updatedUser));
@@ -169,7 +231,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!discussingTopic || !discussingTopic.discussionStartTime || !discussingTopic.discussionDurationMinutes) {
       // If there's no discussing topic or missing data, reset timer only once
       if (!timerRestoredRef.current) {
-        console.log('No discussing topic or missing timer data');
         setTimerSettings({
           durationMinutes: 5,
           isRunning: false,
@@ -184,10 +245,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       return;
     }
 
-    console.log('Restoring timer for topic:', discussingTopic.title);
-    console.log('discussionStartTime:', discussingTopic.discussionStartTime, 'type:', typeof discussingTopic.discussionStartTime);
-    console.log('discussionDurationMinutes:', discussingTopic.discussionDurationMinutes);
-
     const now = Date.now();
     // Convert ISO string to timestamp
     const startTime = discussingTopic.discussionStartTime ? new Date(discussingTopic.discussionStartTime).getTime() : now;
@@ -196,8 +253,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const elapsedMs = now - startTime;
     const remainingMs = Math.max(0, totalMs - elapsedMs);
     const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
-
-    console.log('now:', now, 'startTime:', startTime, 'elapsedMs:', elapsedMs, 'remainingMs:', remainingMs, 'remainingSeconds:', remainingSeconds);
 
     if (remainingMs <= 0) {
       setTimerSettings({
@@ -209,6 +264,10 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         pausedRemainingSeconds: 0,
         currentTopicId: discussingTopic._id,
       });
+      setTimerExpired(true);
+      setShowVotingModal(true);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
     } else {
       setTimerSettings({
         durationMinutes: discussingTopic.discussionDurationMinutes || 0,
@@ -228,8 +287,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   // Subscribe to Pusher timer events for real-time synchronization
   usePusherTimer({
     onTimerUpdated: (timerData) => {
-      // Handle timer duration changes
-      if (timerSettings.currentTopicId === timerData.topicId && timerSettings.isRunning) {
+      // Handle timer duration changes (when admin adds more time)
+      if (timerSettings.currentTopicId === timerData.topicId) {
         const now = Date.now();
         const startTime = timerData.startTime || now;
         const durationMinutes = timerData.durationMinutes || 5;
@@ -247,6 +306,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           isPaused: false,
           pausedRemainingSeconds: null,
         });
+        
+        // Close voting modal when timer is updated (admin added more time)
+        setShowVotingModal(false);
+        setUserVote(null);
+        setVoteCount({ against: 0, neutral: 0, favor: 0 });
+        setTimerExpired(false);
       }
     },
     onTimerStarted: (timerData) => {
@@ -298,8 +363,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   // Subscribe to Pusher user events for online status
   usePusherUsers({
-    onUserJoined: (joinedUser) => {
+    onUserJoined: ({ user: joinedUser, requestSync }) => {
       setOnlineUsers(prev => new Set([...prev, joinedUser._id]));
+
+      if (requestSync && user?._id && user._id !== joinedUser._id && !respondedToSyncRef.current) {
+        respondedToSyncRef.current = true;
+        triggerUserEvent('user-online', { user });
+      }
     },
     onUserLeft: (userId) => {
       setOnlineUsers(prev => {
@@ -307,6 +377,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         newSet.delete(userId);
         return newSet;
       });
+    },
+    onUserOnline: (onlineUser) => {
+      setOnlineUsers(prev => new Set([...prev, onlineUser._id]));
+    },
+    onVoteCast: (data) => {
+      // Update vote count from other users
+      if (data.userId !== user?._id) {
+        setVoteCount(data.voteCount);
+      }
     },
   });
 
@@ -317,18 +396,18 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     }
   }, [user?._id]);
 
-  // Sort users: admins first, then online, then offline
+  // Sort users: online first (admins then users), then offline (admins then users)
   const getSortedUsers = () => {
     return [...users].sort((a, b) => {
-      // Admins first
-      const aIsAdmin = a.roles?.includes('admin') ? 1 : 0;
-      const bIsAdmin = b.roles?.includes('admin') ? 1 : 0;
-      if (aIsAdmin !== bIsAdmin) return bIsAdmin - aIsAdmin;
-
-      // Then online users
+      // Online users first
       const aIsOnline = onlineUsers.has(a._id) ? 1 : 0;
       const bIsOnline = onlineUsers.has(b._id) ? 1 : 0;
       if (aIsOnline !== bIsOnline) return bIsOnline - aIsOnline;
+
+      // Then admins within each group (online/offline)
+      const aIsAdmin = a.roles?.includes('admin') ? 1 : 0;
+      const bIsAdmin = b.roles?.includes('admin') ? 1 : 0;
+      if (aIsAdmin !== bIsAdmin) return bIsAdmin - aIsAdmin;
 
       // Then by name
       return a.name.localeCompare(b.name);
@@ -613,15 +692,33 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     setUserVote(null);
   }, []);
 
+  // Sync online users when voting modal opens
+  useEffect(() => {
+    if (showVotingModal && timerExpired) {
+      // Request sync from other users to get accurate online count
+      triggerUserEvent('user-joined', { user, requestSync: true });
+    }
+  }, [showVotingModal, timerExpired, user]);
+
   const handleVoteSubmit = async (vote: 'finish' | 'continue' | 'against' | 'neutral' | 'favor') => {
     setUserVote(vote);
     
     // Count votes when timer expired
     if (timerExpired && (vote === 'against' || vote === 'neutral' || vote === 'favor')) {
-      setVoteCount(prev => ({
-        ...prev,
-        [vote]: prev[vote as keyof typeof prev] + 1,
-      }));
+      const newVoteCount = {
+        ...voteCount,
+        [vote]: voteCount[vote as keyof typeof voteCount] + 1,
+      };
+      setVoteCount(newVoteCount);
+      
+      // Broadcast vote to other sessions
+      if (user?._id) {
+        triggerUserEvent('vote-cast', {
+          userId: user._id,
+          vote,
+          voteCount: newVoteCount,
+        });
+      }
     }
     
     // In a real app, this would collect votes from all users
@@ -770,20 +867,41 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     }, 500);
   };
 
-  const handleAddTimeConfirm = () => {
-    // Add the selected time and restart timer
-    // Keep the original startTime to track total discussion duration
+  const handleAddTimeConfirm = async () => {
+    const currentTopicId = timerSettings.currentTopicId;
+    const newStartTime = Date.now();
+    const newDurationMinutes = additionalMinutes;
+    
+    if (currentTopicId) {
+      try {
+        await updateTopic(currentTopicId, {
+          discussionStartTime: new Date(newStartTime).toISOString(),
+          discussionDurationMinutes: newDurationMinutes,
+        });
+        
+        await triggerTimerEvent('timer-updated', {
+          topicId: currentTopicId,
+          startTime: newStartTime,
+          durationMinutes: newDurationMinutes,
+        });
+      } catch (error) {
+        console.error('Failed to add time:', error);
+      }
+    }
+    
     setTimerSettings({
       ...timerSettings,
       isRunning: true,
       isPaused: false,
-      // Keep original startTime to track total duration
-      remainingSeconds: additionalMinutes * 60,
+      startTime: newStartTime,
+      remainingSeconds: newDurationMinutes * 60,
       pausedRemainingSeconds: null,
     });
     setShowAddTimeSlider(false);
     setShowVotingModal(false);
     setUserVote(null);
+    setVoteCount({ against: 0, neutral: 0, favor: 0 });
+    setTimerExpired(false);
   };
 
   const handleFinishEarly = () => {
@@ -818,9 +936,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const currentTopicId = timerSettings.currentTopicId;
     if (currentTopicId && timerSettings.startTime) {
       try {
-        const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+        const ds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
         const currentTopic = topics.find(t => t._id === currentTopicId);
-        const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+        const totalTime = (currentTopic?.totalTimeDiscussed || 0) + ds;
 
         await updateTopic(currentTopicId, {
           status: 'discussed',
@@ -1236,7 +1354,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         title={showAddTimeSlider ? "Add More Time" : "Time's Up! Vote on Next Action"}
         showCloseButton={true}
       >
-        {showAddTimeSlider ? (
+        {showAddTimeSlider && user?.roles?.includes('admin') ? (
           // Add time slider UI
           <div className="space-y-4">
             <p className="text-gray-700">Select additional time to continue the discussion:</p>
@@ -1285,7 +1403,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               <button
                 onClick={() => handleVoteSubmit('against')}
                 disabled={userVote !== null}
-                className={`flex flex-col items-center gap-3 transition ${
+                onMouseEnter={() => setHoveredVote('against')}
+                onMouseLeave={() => setHoveredVote(null)}
+                className={`flex flex-col items-center gap-3 transition cursor-pointer ${
                   userVote === 'against' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
                 } disabled:cursor-not-allowed`}
               >
@@ -1293,13 +1413,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
                     userVote === 'against'
                       ? 'bg-red-600 scale-110'
-                      : 'bg-red-100 hover:bg-red-600'
+                      : hoveredVote === 'against' ? 'bg-red-600' : 'bg-red-100'
                   }`}
                 >
-                  <MaterialSymbol 
-                    name="thumb_down" 
+                  <ThumbsDownIcon 
                     size={40} 
-                    color={userVote === 'against' ? '#ffffff' : '#dc2626'}
+                    color={userVote === 'against' || hoveredVote === 'against' ? '#ffffff' : '#dc2626'}
                   />
                 </div>
                 <span className="text-sm font-semibold text-gray-700">Against</span>
@@ -1309,7 +1428,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               <button
                 onClick={() => handleVoteSubmit('neutral')}
                 disabled={userVote !== null}
-                className={`flex flex-col items-center gap-3 transition ${
+                onMouseEnter={() => setHoveredVote('neutral')}
+                onMouseLeave={() => setHoveredVote(null)}
+                className={`flex flex-col items-center gap-3 transition cursor-pointer ${
                   userVote === 'neutral' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
                 } disabled:cursor-not-allowed`}
               >
@@ -1317,13 +1438,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
                     userVote === 'neutral'
                       ? 'bg-yellow-600 scale-110'
-                      : 'bg-yellow-100 hover:bg-yellow-600'
+                      : hoveredVote === 'neutral' ? 'bg-yellow-600' : 'bg-yellow-100'
                   }`}
                 >
-                  <MaterialSymbol 
-                    name="equal" 
+                  <EqualIcon 
                     size={40} 
-                    color={userVote === 'neutral' ? '#ffffff' : '#ca8a04'}
+                    color={userVote === 'neutral' || hoveredVote === 'neutral' ? '#ffffff' : '#ca8a04'}
                   />
                 </div>
                 <span className="text-sm font-semibold text-gray-700">Neutral</span>
@@ -1333,7 +1453,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               <button
                 onClick={() => handleVoteSubmit('favor')}
                 disabled={userVote !== null}
-                className={`flex flex-col items-center gap-3 transition ${
+                onMouseEnter={() => setHoveredVote('favor')}
+                onMouseLeave={() => setHoveredVote(null)}
+                className={`flex flex-col items-center gap-3 transition cursor-pointer ${
                   userVote === 'favor' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
                 } disabled:cursor-not-allowed`}
               >
@@ -1341,13 +1463,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
                     userVote === 'favor'
                       ? 'bg-green-600 scale-110'
-                      : 'bg-green-100 hover:bg-green-600'
+                      : hoveredVote === 'favor' ? 'bg-green-600' : 'bg-green-100'
                   }`}
                 >
-                  <MaterialSymbol 
-                    name="thumb_up" 
+                  <ThumbsUpIcon 
                     size={40} 
-                    color={userVote === 'favor' ? '#ffffff' : '#16a34a'}
+                    color={userVote === 'favor' || hoveredVote === 'favor' ? '#ffffff' : '#16a34a'}
                   />
                 </div>
                 <span className="text-sm font-semibold text-gray-700">Favor</span>
@@ -1356,7 +1477,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
             {/* Vote Count Display */}
             <div className="bg-gray-100 rounded-lg p-4 mb-6">
-              <p className="text-center text-sm font-semibold text-gray-700 mb-3">Current Votes</p>
+              <div className="flex justify-between items-center mb-3">
+                <p className="text-sm font-semibold text-gray-700">Current Votes</p>
+                <p className="text-xs text-gray-600">
+                  {voteCount.against + voteCount.neutral + voteCount.favor} / {onlineUsers.size} voted
+                </p>
+              </div>
               <div className="flex justify-around">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-red-600">{voteCount.against}</div>
@@ -1374,19 +1500,34 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             </div>
 
             {/* Admin Controls - Only show if current user is admin */}
-            {user?.roles?.includes('admin') && (
+            {user?.roles?.includes('admin') ? (
               <div className="flex gap-3">
                 <button
-                  onClick={handleAdminContinueDiscussion}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+                  onClick={() => setShowAddTimeSlider(true)}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2"
                 >
-                  Continue Discussion
+                  <ClockIcon size={20} color="white" />
+                  Add More Time
                 </button>
                 <button
                   onClick={handleAdminFinishDiscussion}
-                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold flex items-center justify-center gap-2"
                 >
+                  <CheckIcon size={20} color="white" />
                   Finish Discussion
+                </button>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="text-sm text-gray-600 mb-3">Waiting for admin to decide...</p>
+                <button
+                  onClick={() => {
+                    setShowVotingModal(false);
+                    setUserVote(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
+                >
+                  Close
                 </button>
               </div>
             )}
@@ -1405,7 +1546,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     : 'bg-green-100 text-green-700 hover:bg-green-600 hover:text-white'
                 } disabled:cursor-not-allowed`}
               >
-                {userVote === 'finish' && <CheckIcon size={20} color="currentColor" />}
+                <CheckIcon size={20} color="currentColor" />
                 {userVote === 'finish' ? 'Voted to ' : ''}Finish Topic
               </button>
               <button
@@ -1417,8 +1558,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
                 } disabled:cursor-not-allowed`}
               >
-                {userVote === 'continue' && <CheckIcon size={20} color="currentColor" />}
-                {userVote === 'continue' ? 'Voted to ' : ''}Continue Discussion
+                <ClockIcon size={20} color="currentColor" />
+                {userVote === 'continue' ? 'Voted to ' : ''}Continue Topic
               </button>
             </div>
           </>

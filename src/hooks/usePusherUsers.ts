@@ -2,11 +2,18 @@ import { useEffect, useRef } from 'react';
 import { usePusher } from '@/context/PusherContext';
 import type { User } from '@/types';
 
+interface UserJoinedPayload {
+  user: User;
+  requestSync?: boolean;
+}
+
 interface UsePusherUsersProps {
-  onUserJoined?: (user: User) => void;
+  onUserJoined?: (payload: UserJoinedPayload) => void;
   onUserLeft?: (userId: string) => void;
   onUserUpdated?: (user: User) => void;
   onVotesUpdated?: (userId: string, votesRemaining: number) => void;
+  onUserOnline?: (user: User) => void;
+  onVoteCast?: (data: { userId: string; vote: string; voteCount: { against: number; neutral: number; favor: number } }) => void;
 }
 
 export function usePusherUsers({
@@ -14,22 +21,24 @@ export function usePusherUsers({
   onUserLeft,
   onUserUpdated,
   onVotesUpdated,
+  onUserOnline,
+  onVoteCast,
 }: UsePusherUsersProps) {
   const { subscribe, unsubscribe } = usePusher();
-  const callbacksRef = useRef({ onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated });
+  const callbacksRef = useRef({ onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated, onUserOnline, onVoteCast });
 
   // Update callbacks ref without triggering effect
   useEffect(() => {
-    callbacksRef.current = { onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated };
-  }, [onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated]);
+    callbacksRef.current = { onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated, onUserOnline, onVoteCast };
+  }, [onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated, onUserOnline, onVoteCast]);
 
   useEffect(() => {
     const channel = subscribe('users');
     if (!channel) return;
 
     if (callbacksRef.current.onUserJoined) {
-      channel.bind('user-joined', (data: { user: User }) => {
-        callbacksRef.current.onUserJoined?.(data.user);
+      channel.bind('user-joined', (data: UserJoinedPayload) => {
+        callbacksRef.current.onUserJoined?.(data);
       });
     }
 
@@ -51,11 +60,25 @@ export function usePusherUsers({
       });
     }
 
+    if (callbacksRef.current.onUserOnline) {
+      channel.bind('user-online', (data: { user: User }) => {
+        callbacksRef.current.onUserOnline?.(data.user);
+      });
+    }
+
+    if (callbacksRef.current.onVoteCast) {
+      channel.bind('vote-cast', (data: { userId: string; vote: string; voteCount: { against: number; neutral: number; favor: number } }) => {
+        callbacksRef.current.onVoteCast?.(data);
+      });
+    }
+
     return () => {
       if (callbacksRef.current.onUserJoined) channel.unbind('user-joined');
       if (callbacksRef.current.onUserLeft) channel.unbind('user-left');
       if (callbacksRef.current.onUserUpdated) channel.unbind('user-updated');
       if (callbacksRef.current.onVotesUpdated) channel.unbind('votes-updated');
+      if (callbacksRef.current.onUserOnline) channel.unbind('user-online');
+      if (callbacksRef.current.onVoteCast) channel.unbind('vote-cast');
       unsubscribe('users');
     };
   }, [subscribe, unsubscribe]);
@@ -63,7 +86,7 @@ export function usePusherUsers({
 
 // Helper function to trigger user events
 export async function triggerUserEvent(
-  event: 'user-joined' | 'user-left' | 'user-updated' | 'votes-updated',
+  event: 'user-joined' | 'user-left' | 'user-updated' | 'votes-updated' | 'user-online' | 'vote-cast',
   data: any
 ) {
   try {
