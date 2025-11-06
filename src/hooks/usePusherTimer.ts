@@ -3,10 +3,11 @@ import { usePusher } from '@/context/PusherContext';
 
 interface TimerEvent {
   topicId: string;
-  remainingSeconds: number;
-  isRunning: boolean;
-  isPaused: boolean;
-  durationMinutes: number;
+  remainingSeconds?: number;
+  isRunning?: boolean;
+  isPaused?: boolean;
+  durationMinutes?: number;
+  startTime?: number;
 }
 
 interface UsePusherTimerProps {
@@ -68,7 +69,7 @@ export async function triggerTimerEvent(
   data: any
 ) {
   try {
-    await fetch('/api/pusher/topics', {
+    await fetch('/api/pusher/timer', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

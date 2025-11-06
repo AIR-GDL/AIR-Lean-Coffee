@@ -198,6 +198,55 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, topics]);
 
+  // Subscribe to Pusher timer events for real-time synchronization
+  usePusherTimer({
+    onTimerStarted: (timerData) => {
+      // Always update timer from Pusher to keep all clients in sync
+      // This ensures that after reload, the timer is synchronized with other clients
+      
+      // Use the startTime from the event to calculate remaining seconds
+      const now = Date.now();
+      const startTime = timerData.startTime || now;
+      const durationMinutes = timerData.durationMinutes || 5;
+      const totalMs = durationMinutes * 60 * 1000;
+      const elapsedMs = now - startTime;
+      const remainingMs = Math.max(0, totalMs - elapsedMs);
+      const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+
+      setTimerSettings({
+        durationMinutes,
+        isRunning: true,
+        startTime,
+        remainingSeconds,
+        currentTopicId: timerData.topicId,
+        isPaused: false,
+        pausedRemainingSeconds: null,
+      });
+    },
+    onTimerPaused: (timerData) => {
+      setTimerSettings({
+        durationMinutes: timerData.durationMinutes || 5,
+        isRunning: false,
+        isPaused: true,
+        pausedRemainingSeconds: timerData.remainingSeconds || 0,
+        startTime: null,
+        remainingSeconds: timerData.remainingSeconds || 0,
+        currentTopicId: timerData.topicId,
+      });
+    },
+    onTimerStopped: () => {
+      setTimerSettings({
+        durationMinutes: 5,
+        isRunning: false,
+        startTime: null,
+        remainingSeconds: null,
+        currentTopicId: null,
+        isPaused: false,
+        pausedRemainingSeconds: null,
+      });
+    },
+  });
+
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
     return topics.filter(topic => topic.status === dbStatus && !topic.archived);
@@ -207,7 +256,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!newTopicTitle.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
-    showLoader('Creating topic...');
     try {
       const newTopic = await createTopic({
         title: newTopicTitle.trim(),
@@ -227,12 +275,10 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       alert('Failed to create topic. Please try again.');
     } finally {
       setIsSubmitting(false);
-      hideLoader();
     }
   };
 
   const handleVote = async (topicId: string) => {
-    showLoader('Voting...');
     try {
       const response = await updateTopic(topicId, {
         action: 'VOTE',
@@ -257,8 +303,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to vote:', error);
       alert(error instanceof Error ? error.message : 'Failed to vote. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 
@@ -364,7 +408,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleMoveToDiscussed = async (topicId: string) => {
-    showLoader('Moving to discussed...');
     try {
       const topic = topics.find(t => t._id === topicId);
       if (!topic) return;
@@ -391,8 +434,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to move topic to discussed:', error);
       alert('Failed to move topic. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 
@@ -408,8 +449,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   const handleDeleteParticipants = async () => {
     if (selectedParticipants.size === 0) return;
-
-    showLoader('Deleting participants...');
     try {
       // Delete each selected participant
       for (const userId of selectedParticipants) {
@@ -428,8 +467,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to delete participants:', error);
       alert('Failed to delete participants. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 
@@ -439,7 +476,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const { topicId } = pendingTopicMove;
     const now = Date.now();
     
-    showLoader('Starting discussion...');
     try {
       const updatedTopic = await updateTopic(topicId, {
         status: 'discussing',
@@ -473,17 +509,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     } catch (error) {
       console.error('Failed to update topic status:', error);
       alert('Failed to start discussion. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 
   const handleTimerComplete = () => {
-    // Mark timer as paused at 0 seconds
+    // Show voting modal but keep timer state for potential "continue"
+    // Store remaining seconds as 0 to indicate timer expired
     setTimerSettings({
       ...timerSettings,
-      isRunning: false,
-      isPaused: true,
       pausedRemainingSeconds: 0,
     });
     setShowVotingModal(true);
@@ -492,7 +525,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
     setUserVote(vote);
-    showLoader(vote === 'finish' ? 'Finishing topic...' : 'Continuing discussion...');
     
     // In a real app, this would collect votes from all users
     // For now, we'll simulate immediate action
@@ -527,8 +559,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             await mutateUsers(); // Refresh users to update vote counts
           } catch (error) {
             console.error('Failed to finish topic:', error);
-          } finally {
-            hideLoader();
           }
         }
 
@@ -551,29 +581,25 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             hideLoader();
             return; // Exit early, don't close modal
           } else {
-            // Resume from paused time - continue where it was paused
-            // Calculate new startTime to maintain the remaining seconds
-            const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
+            // User pressed "Finish Early" but wants to continue
+            // Just resume the timer without recalculating
             setTimerSettings({
               ...timerSettings,
               isRunning: true,
               isPaused: false,
-              startTime: newStartTime,
-              remainingSeconds: timerSettings.pausedRemainingSeconds,
               pausedRemainingSeconds: null,
             });
 
             // Trigger Pusher event for timer resumed
-            if (timerSettings.currentTopicId) {
+            if (timerSettings.currentTopicId && timerSettings.startTime) {
               await triggerTimerEvent('timer-started', {
                 topicId: timerSettings.currentTopicId,
-                startTime: newStartTime,
+                startTime: timerSettings.startTime,
                 durationMinutes: timerSettings.durationMinutes,
               });
             }
           }
         }
-        hideLoader();
       }
 
       // Close modal first
