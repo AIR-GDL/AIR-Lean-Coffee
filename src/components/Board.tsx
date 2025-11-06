@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
@@ -152,6 +152,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!discussingTopic || !discussingTopic.discussionStartTime || !discussingTopic.discussionDurationMinutes) {
       // If there's no discussing topic or missing data, reset timer only once
       if (!timerRestoredRef.current) {
+        console.log('No discussing topic or missing timer data');
         setTimerSettings({
           durationMinutes: 5,
           isRunning: false,
@@ -166,18 +167,27 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       return;
     }
 
+    console.log('Restoring timer for topic:', discussingTopic.title);
+    console.log('discussionStartTime:', discussingTopic.discussionStartTime, 'type:', typeof discussingTopic.discussionStartTime);
+    console.log('discussionDurationMinutes:', discussingTopic.discussionDurationMinutes);
+
     const now = Date.now();
-    const totalMs = discussingTopic.discussionDurationMinutes * 60 * 1000;
-    const elapsedMs = now - discussingTopic.discussionStartTime;
+    // Convert ISO string to timestamp
+    const startTime = discussingTopic.discussionStartTime ? new Date(discussingTopic.discussionStartTime).getTime() : now;
+    const durationMinutes = Number(discussingTopic.discussionDurationMinutes);
+    const totalMs = durationMinutes * 60 * 1000;
+    const elapsedMs = now - startTime;
     const remainingMs = Math.max(0, totalMs - elapsedMs);
     const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+    console.log('now:', now, 'startTime:', startTime, 'elapsedMs:', elapsedMs, 'remainingMs:', remainingMs, 'remainingSeconds:', remainingSeconds);
 
     if (remainingMs <= 0) {
       setTimerSettings({
         durationMinutes: discussingTopic.discussionDurationMinutes || 0,
         isRunning: false,
         isPaused: true,
-        startTime: discussingTopic.discussionStartTime || null,
+        startTime,
         remainingSeconds: 0,
         pausedRemainingSeconds: 0,
         currentTopicId: discussingTopic._id,
@@ -200,6 +210,28 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   // Subscribe to Pusher timer events for real-time synchronization
   usePusherTimer({
+    onTimerUpdated: (timerData) => {
+      // Handle timer duration changes
+      if (timerSettings.currentTopicId === timerData.topicId && timerSettings.isRunning) {
+        const now = Date.now();
+        const startTime = timerData.startTime || now;
+        const durationMinutes = timerData.durationMinutes || 5;
+        const totalMs = durationMinutes * 60 * 1000;
+        const elapsedMs = now - startTime;
+        const remainingMs = Math.max(0, totalMs - elapsedMs);
+        const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+
+        setTimerSettings({
+          durationMinutes,
+          isRunning: true,
+          startTime,
+          remainingSeconds,
+          currentTopicId: timerData.topicId,
+          isPaused: false,
+          pausedRemainingSeconds: null,
+        });
+      }
+    },
     onTimerStarted: (timerData) => {
       // Always update timer from Pusher to keep all clients in sync
       // This ensures that after reload, the timer is synchronized with other clients
@@ -474,12 +506,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!pendingTopicMove) return;
 
     const { topicId } = pendingTopicMove;
-    const now = Date.now();
+    const now = new Date();
+    const nowTimestamp = Date.now();
     
     try {
       const updatedTopic = await updateTopic(topicId, {
         status: 'discussing',
-        discussionStartTime: now,
+        discussionStartTime: now.toISOString(),
         discussionDurationMinutes: timerSettings.durationMinutes,
       });
 
@@ -490,7 +523,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       });
       await triggerTimerEvent('timer-started', {
         topicId,
-        startTime: now,
+        startTime: nowTimestamp,
         durationMinutes: timerSettings.durationMinutes,
       });
 
@@ -498,7 +531,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       setTimerSettings({
         ...timerSettings,
         isRunning: true,
-        startTime: now,
+        startTime: nowTimestamp,
         remainingSeconds: timerSettings.durationMinutes * 60,
         currentTopicId: topicId,
       });
@@ -512,16 +545,16 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     }
   };
 
-  const handleTimerComplete = () => {
+  const handleTimerComplete = useCallback(() => {
     // Show voting modal but keep timer state for potential "continue"
     // Store remaining seconds as 0 to indicate timer expired
-    setTimerSettings({
-      ...timerSettings,
+    setTimerSettings((prev) => ({
+      ...prev,
       pausedRemainingSeconds: 0,
-    });
+    }));
     setShowVotingModal(true);
     setUserVote(null);
-  };
+  }, []);
 
   const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
     setUserVote(vote);

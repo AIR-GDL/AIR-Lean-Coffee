@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePusher } from '@/context/PusherContext';
 
 interface TimerEvent {
@@ -24,43 +24,49 @@ export function usePusherTimer({
   onTimerStopped,
 }: UsePusherTimerProps) {
   const { subscribe, unsubscribe } = usePusher();
+  const callbacksRef = useRef({ onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped });
+
+  // Update callbacks ref without triggering effect
+  useEffect(() => {
+    callbacksRef.current = { onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped };
+  }, [onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped]);
 
   useEffect(() => {
     const channel = subscribe('timer');
     if (!channel) return;
 
-    if (onTimerUpdated) {
+    if (callbacksRef.current.onTimerUpdated) {
       channel.bind('timer-updated', (data: TimerEvent) => {
-        onTimerUpdated(data);
+        callbacksRef.current.onTimerUpdated?.(data);
       });
     }
 
-    if (onTimerStarted) {
+    if (callbacksRef.current.onTimerStarted) {
       channel.bind('timer-started', (data: TimerEvent) => {
-        onTimerStarted(data);
+        callbacksRef.current.onTimerStarted?.(data);
       });
     }
 
-    if (onTimerPaused) {
+    if (callbacksRef.current.onTimerPaused) {
       channel.bind('timer-paused', (data: TimerEvent) => {
-        onTimerPaused(data);
+        callbacksRef.current.onTimerPaused?.(data);
       });
     }
 
-    if (onTimerStopped) {
+    if (callbacksRef.current.onTimerStopped) {
       channel.bind('timer-stopped', (data: { topicId: string }) => {
-        onTimerStopped(data.topicId);
+        callbacksRef.current.onTimerStopped?.(data.topicId);
       });
     }
 
     return () => {
-      if (onTimerUpdated) channel.unbind('timer-updated');
-      if (onTimerStarted) channel.unbind('timer-started');
-      if (onTimerPaused) channel.unbind('timer-paused');
-      if (onTimerStopped) channel.unbind('timer-stopped');
+      if (callbacksRef.current.onTimerUpdated) channel.unbind('timer-updated');
+      if (callbacksRef.current.onTimerStarted) channel.unbind('timer-started');
+      if (callbacksRef.current.onTimerPaused) channel.unbind('timer-paused');
+      if (callbacksRef.current.onTimerStopped) channel.unbind('timer-stopped');
       unsubscribe('timer');
     };
-  }, [subscribe, unsubscribe, onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped]);
+  }, [subscribe, unsubscribe]);
 }
 
 // Helper function to trigger timer events

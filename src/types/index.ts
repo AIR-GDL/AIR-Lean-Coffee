@@ -18,7 +18,7 @@ export interface Topic {
   archived: boolean; // Whether the topic has been archived
   createdAt: string;
   discussedAt?: string;
-  discussionStartTime?: number; // Timestamp when discussion started (for timer recovery)
+  discussionStartTime?: string; // ISO date string when discussion started (for timer recovery)
   discussionDurationMinutes?: number; // Duration in minutes when discussion started (for timer recovery)
   totalTimeDiscussed: number; // Total discussion time in seconds
 }
@@ -59,7 +59,7 @@ export interface UpdateTopicRequest {
   status?: 'to-discuss' | 'discussing' | 'discussed';
   title?: string;
   description?: string;
-  discussionStartTime?: number;
+  discussionStartTime?: string | Date;
   discussionDurationMinutes?: number;
   totalTimeDiscussed?: number;
   archived?: boolean;

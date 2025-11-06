@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePusher } from '@/context/PusherContext';
 import type { User } from '@/types';
 
@@ -16,43 +16,49 @@ export function usePusherUsers({
   onVotesUpdated,
 }: UsePusherUsersProps) {
   const { subscribe, unsubscribe } = usePusher();
+  const callbacksRef = useRef({ onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated });
+
+  // Update callbacks ref without triggering effect
+  useEffect(() => {
+    callbacksRef.current = { onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated };
+  }, [onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated]);
 
   useEffect(() => {
     const channel = subscribe('users');
     if (!channel) return;
 
-    if (onUserJoined) {
+    if (callbacksRef.current.onUserJoined) {
       channel.bind('user-joined', (data: { user: User }) => {
-        onUserJoined(data.user);
+        callbacksRef.current.onUserJoined?.(data.user);
       });
     }
 
-    if (onUserLeft) {
+    if (callbacksRef.current.onUserLeft) {
       channel.bind('user-left', (data: { userId: string }) => {
-        onUserLeft(data.userId);
+        callbacksRef.current.onUserLeft?.(data.userId);
       });
     }
 
-    if (onUserUpdated) {
+    if (callbacksRef.current.onUserUpdated) {
       channel.bind('user-updated', (data: { user: User }) => {
-        onUserUpdated(data.user);
+        callbacksRef.current.onUserUpdated?.(data.user);
       });
     }
 
-    if (onVotesUpdated) {
+    if (callbacksRef.current.onVotesUpdated) {
       channel.bind('votes-updated', (data: { userId: string; votesRemaining: number }) => {
-        onVotesUpdated(data.userId, data.votesRemaining);
+        callbacksRef.current.onVotesUpdated?.(data.userId, data.votesRemaining);
       });
     }
 
     return () => {
-      if (onUserJoined) channel.unbind('user-joined');
-      if (onUserLeft) channel.unbind('user-left');
-      if (onUserUpdated) channel.unbind('user-updated');
-      if (onVotesUpdated) channel.unbind('votes-updated');
+      if (callbacksRef.current.onUserJoined) channel.unbind('user-joined');
+      if (callbacksRef.current.onUserLeft) channel.unbind('user-left');
+      if (callbacksRef.current.onUserUpdated) channel.unbind('user-updated');
+      if (callbacksRef.current.onVotesUpdated) channel.unbind('votes-updated');
       unsubscribe('users');
     };
-  }, [subscribe, unsubscribe, onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated]);
+  }, [subscribe, unsubscribe]);
 }
 
 // Helper function to trigger user events

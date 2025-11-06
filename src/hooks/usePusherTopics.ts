@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePusher } from '@/context/PusherContext';
 import type { Topic } from '@/types';
 
@@ -16,47 +16,53 @@ export function usePusherTopics({
   onTopicStatusChanged,
 }: UsePusherTopicsProps) {
   const { subscribe, unsubscribe } = usePusher();
+  const callbacksRef = useRef({ onTopicCreated, onTopicUpdated, onTopicDeleted, onTopicStatusChanged });
+
+  // Update callbacks ref without triggering effect
+  useEffect(() => {
+    callbacksRef.current = { onTopicCreated, onTopicUpdated, onTopicDeleted, onTopicStatusChanged };
+  }, [onTopicCreated, onTopicUpdated, onTopicDeleted, onTopicStatusChanged]);
 
   useEffect(() => {
     const channel = subscribe('topics');
     if (!channel) return;
 
     // Listen for topic created event
-    if (onTopicCreated) {
+    if (callbacksRef.current.onTopicCreated) {
       channel.bind('topic-created', (data: { topic: Topic }) => {
-        onTopicCreated(data.topic);
+        callbacksRef.current.onTopicCreated?.(data.topic);
       });
     }
 
     // Listen for topic updated event
-    if (onTopicUpdated) {
+    if (callbacksRef.current.onTopicUpdated) {
       channel.bind('topic-updated', (data: { topic: Topic }) => {
-        onTopicUpdated(data.topic);
+        callbacksRef.current.onTopicUpdated?.(data.topic);
       });
     }
 
     // Listen for topic deleted event
-    if (onTopicDeleted) {
+    if (callbacksRef.current.onTopicDeleted) {
       channel.bind('topic-deleted', (data: { topicId: string }) => {
-        onTopicDeleted(data.topicId);
+        callbacksRef.current.onTopicDeleted?.(data.topicId);
       });
     }
 
     // Listen for topic status changed event
-    if (onTopicStatusChanged) {
+    if (callbacksRef.current.onTopicStatusChanged) {
       channel.bind('topic-status-changed', (data: { topicId: string; status: string }) => {
-        onTopicStatusChanged(data.topicId, data.status);
+        callbacksRef.current.onTopicStatusChanged?.(data.topicId, data.status);
       });
     }
 
     return () => {
-      if (onTopicCreated) channel.unbind('topic-created');
-      if (onTopicUpdated) channel.unbind('topic-updated');
-      if (onTopicDeleted) channel.unbind('topic-deleted');
-      if (onTopicStatusChanged) channel.unbind('topic-status-changed');
+      if (callbacksRef.current.onTopicCreated) channel.unbind('topic-created');
+      if (callbacksRef.current.onTopicUpdated) channel.unbind('topic-updated');
+      if (callbacksRef.current.onTopicDeleted) channel.unbind('topic-deleted');
+      if (callbacksRef.current.onTopicStatusChanged) channel.unbind('topic-status-changed');
       unsubscribe('topics');
     };
-  }, [subscribe, unsubscribe, onTopicCreated, onTopicUpdated, onTopicDeleted, onTopicStatusChanged]);
+  }, [subscribe, unsubscribe]);
 }
 
 // Helper function to trigger topic events
