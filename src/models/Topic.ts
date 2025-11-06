@@ -13,6 +13,11 @@ export interface ITopic extends Document {
   discussionStartTime?: Date; // ISO date when discussion started (for timer recovery)
   discussionDurationMinutes?: number; // Duration in minutes when discussion started (for timer recovery)
   totalTimeDiscussed: number; // Total discussion time in seconds
+  finalVotes?: {
+    against: number;
+    neutral: number;
+    favor: number;
+  }; // Final voting results when timer expires
 }
 
 const TopicSchema = new Schema<ITopic>({
@@ -61,6 +66,20 @@ const TopicSchema = new Schema<ITopic>({
   totalTimeDiscussed: {
     type: Number,
     default: 0,
+  },
+  finalVotes: {
+    against: {
+      type: Number,
+      default: 0,
+    },
+    neutral: {
+      type: Number,
+      default: 0,
+    },
+    favor: {
+      type: Number,
+      default: 0,
+    },
   },
 });
 

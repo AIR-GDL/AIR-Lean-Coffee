@@ -4,6 +4,7 @@ export interface User {
   name: string;
   email: string;
   votesRemaining: number;
+  roles: ('user' | 'admin')[];
   createdAt: string;
 }
 
@@ -21,6 +22,11 @@ export interface Topic {
   discussionStartTime?: string; // ISO date string when discussion started (for timer recovery)
   discussionDurationMinutes?: number; // Duration in minutes when discussion started (for timer recovery)
   totalTimeDiscussed: number; // Total discussion time in seconds
+  finalVotes?: {
+    against: number;
+    neutral: number;
+    favor: number;
+  }; // Final voting results when timer expires
 }
 
 // Client-side types

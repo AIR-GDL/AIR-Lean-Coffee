@@ -67,7 +67,7 @@ export async function triggerUserEvent(
   data: any
 ) {
   try {
-    await fetch('/api/pusher/topics', {
+    await fetch('/api/pusher/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

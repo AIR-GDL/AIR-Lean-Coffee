@@ -20,6 +20,8 @@ import PeopleIcon from './icons/PeopleIcon';
 import StopIcon from './icons/StopIcon';
 import CheckIcon from './icons/CheckIcon';
 import DeleteIcon from './icons/DeleteIcon';
+import MaterialSymbol from './icons/MaterialSymbol';
+import ShieldIcon from './icons/ShieldIcon';
 import FeedbackMenu from './FeedbackMenu';
 import BugReportModal from './BugReportModal';
 import ChangelogModal from './ChangelogModal';
@@ -75,14 +77,17 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [showConfirmDiscussModal, setShowConfirmDiscussModal] = useState(false);
   const [showVotingModal, setShowVotingModal] = useState(false);
   const [pendingTopicMove, setPendingTopicMove] = useState<{ topicId: string } | null>(null);
-  const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
+  const [userVote, setUserVote] = useState<'finish' | 'continue' | 'against' | 'neutral' | 'favor' | null>(null);
   const [showAddTimeSlider, setShowAddTimeSlider] = useState(false);
+  const [timerExpired, setTimerExpired] = useState(false);
+  const [voteCount, setVoteCount] = useState({ against: 0, neutral: 0, favor: 0 });
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
   const [showBugReportModal, setShowBugReportModal] = useState(false);
   const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
   const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -112,6 +117,18 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   useEffect(() => {
     setUser(initialUser);
   }, [initialUser]);
+
+  // Trigger user-joined event when user loads and user-left when unmounts
+  useEffect(() => {
+    if (initialUser?._id) {
+      triggerUserEvent('user-joined', { user: initialUser });
+
+      // Cleanup: trigger user-left when component unmounts
+      return () => {
+        triggerUserEvent('user-left', { userId: initialUser._id });
+      };
+    }
+  }, [initialUser?._id]);
 
   // Update current user when users list changes (vote returns)
   // Also check if user still exists (wasn't deleted by another session)
@@ -278,6 +295,45 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       });
     },
   });
+
+  // Subscribe to Pusher user events for online status
+  usePusherUsers({
+    onUserJoined: (joinedUser) => {
+      setOnlineUsers(prev => new Set([...prev, joinedUser._id]));
+    },
+    onUserLeft: (userId) => {
+      setOnlineUsers(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    },
+  });
+
+  // Mark current user as online on mount
+  useEffect(() => {
+    if (user?._id) {
+      setOnlineUsers(prev => new Set([...prev, user._id]));
+    }
+  }, [user?._id]);
+
+  // Sort users: admins first, then online, then offline
+  const getSortedUsers = () => {
+    return [...users].sort((a, b) => {
+      // Admins first
+      const aIsAdmin = a.roles?.includes('admin') ? 1 : 0;
+      const bIsAdmin = b.roles?.includes('admin') ? 1 : 0;
+      if (aIsAdmin !== bIsAdmin) return bIsAdmin - aIsAdmin;
+
+      // Then online users
+      const aIsOnline = onlineUsers.has(a._id) ? 1 : 0;
+      const bIsOnline = onlineUsers.has(b._id) ? 1 : 0;
+      if (aIsOnline !== bIsOnline) return bIsOnline - aIsOnline;
+
+      // Then by name
+      return a.name.localeCompare(b.name);
+    });
+  };
 
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
@@ -552,17 +608,77 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       ...prev,
       pausedRemainingSeconds: 0,
     }));
+    setTimerExpired(true);
     setShowVotingModal(true);
     setUserVote(null);
   }, []);
 
-  const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
+  const handleVoteSubmit = async (vote: 'finish' | 'continue' | 'against' | 'neutral' | 'favor') => {
     setUserVote(vote);
+    
+    // Count votes when timer expired
+    if (timerExpired && (vote === 'against' || vote === 'neutral' || vote === 'favor')) {
+      setVoteCount(prev => ({
+        ...prev,
+        [vote]: prev[vote as keyof typeof prev] + 1,
+      }));
+    }
     
     // In a real app, this would collect votes from all users
     // For now, we'll simulate immediate action
     setTimeout(async () => {
-      if (vote === 'finish') {
+      // Handle timer expired votes (against, neutral, favor)
+      if (timerExpired && (vote === 'against' || vote === 'neutral' || vote === 'favor')) {
+        if (vote === 'against') {
+          // Move topic to discussed (don't continue)
+          const currentTopicId = timerSettings.currentTopicId;
+          if (currentTopicId && timerSettings.startTime) {
+            try {
+              const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+              const currentTopic = topics.find(t => t._id === currentTopicId);
+              const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+              
+              await updateTopic(currentTopicId, {
+                status: 'discussed',
+                totalTimeDiscussed: totalTime,
+              });
+
+              await triggerTopicEvent('topic-status-changed', {
+                topicId: currentTopicId,
+                status: 'discussed',
+              });
+              await triggerTimerEvent('timer-stopped', {
+                topicId: currentTopicId,
+              });
+
+              await mutate();
+              await mutateUsers();
+            } catch (error) {
+              console.error('Failed to finish topic:', error);
+            }
+          }
+
+          setTimerSettings({
+            ...timerSettings,
+            isRunning: false,
+            startTime: null,
+            remainingSeconds: null,
+            currentTopicId: null,
+            isPaused: false,
+            pausedRemainingSeconds: null,
+          });
+        } else if (vote === 'neutral') {
+          // Neutral - just close modal and show add time slider
+          setShowAddTimeSlider(true);
+          hideLoader();
+          return;
+        } else if (vote === 'favor') {
+          // Favor - show add time slider
+          setShowAddTimeSlider(true);
+          hideLoader();
+          return;
+        }
+      } else if (vote === 'finish') {
         // Move topic to discussed
         const currentTopicId = timerSettings.currentTopicId;
         if (currentTopicId && timerSettings.startTime) {
@@ -639,6 +755,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       setShowVotingModal(false);
       setUserVote(null);
       setShowAddTimeSlider(false);
+      setTimerExpired(false);
 
       // Trigger confetti AFTER modal closes (only for finish action)
       if (vote === 'finish') {
@@ -679,6 +796,76 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     });
     setShowVotingModal(true);
     setUserVote(null);
+  };
+
+  const handleAdminContinueDiscussion = async () => {
+    // Admin decides to continue - save votes and show add time slider
+    const currentTopicId = timerSettings.currentTopicId;
+    if (currentTopicId) {
+      try {
+        await updateTopic(currentTopicId, {
+          finalVotes: voteCount,
+        });
+      } catch (error) {
+        console.error('Failed to save votes:', error);
+      }
+    }
+    setShowAddTimeSlider(true);
+  };
+
+  const handleAdminFinishDiscussion = async () => {
+    // Admin decides to finish - save votes and move to discussed
+    const currentTopicId = timerSettings.currentTopicId;
+    if (currentTopicId && timerSettings.startTime) {
+      try {
+        const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+        const currentTopic = topics.find(t => t._id === currentTopicId);
+        const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+
+        await updateTopic(currentTopicId, {
+          status: 'discussed',
+          totalTimeDiscussed: totalTime,
+          finalVotes: voteCount,
+        });
+
+        await triggerTopicEvent('topic-status-changed', {
+          topicId: currentTopicId,
+          status: 'discussed',
+        });
+        await triggerTimerEvent('timer-stopped', {
+          topicId: currentTopicId,
+        });
+
+        await mutate();
+        await mutateUsers();
+      } catch (error) {
+        console.error('Failed to finish discussion:', error);
+      }
+    }
+
+    setTimerSettings({
+      ...timerSettings,
+      isRunning: false,
+      startTime: null,
+      remainingSeconds: null,
+      currentTopicId: null,
+      isPaused: false,
+      pausedRemainingSeconds: null,
+    });
+
+    setShowVotingModal(false);
+    setUserVote(null);
+    setShowAddTimeSlider(false);
+    setTimerExpired(false);
+    setVoteCount({ against: 0, neutral: 0, favor: 0 });
+
+    setTimeout(() => {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+    }, 100);
   };
 
   const handleLogout = () => {
@@ -879,7 +1066,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     )}
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
-                    {users.map((participant) => (
+                    {getSortedUsers().map((participant) => (
                       <div
                         key={participant._id}
                         className={`flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0 flex-shrink-0 transition ${
@@ -897,7 +1084,23 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                               className="w-4 h-4 rounded cursor-pointer"
                             />
                           )}
-                          <span className="font-medium text-gray-700 truncate">{participant.name}</span>
+                          <div className="flex items-center gap-1 min-w-0 flex-1">
+                            {/* Online Status Indicator */}
+                            {onlineUsers.has(participant._id) ? (
+                              <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0 animate-pulse" title="Online"></div>
+                            ) : (
+                              <div className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" title="Offline"></div>
+                            )}
+                            <span className="font-medium text-gray-700 truncate">{participant.name}</span>
+                            {/* Admin Badge - Only show if user is admin */}
+                            {participant.roles?.includes('admin') && (
+                              <ShieldIcon
+                                size={16}
+                                className="flex-shrink-0"
+                                fill="#2563eb"
+                              />
+                            )}
+                          </div>
                         </div>
                         <span className="text-xs font-semibold px-2 py-1 rounded flex-shrink-0" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
                           {participant.votesRemaining} vote{participant.votesRemaining !== 1 ? 's' : ''}
@@ -1073,8 +1276,123 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               </button>
             </div>
           </div>
+        ) : timerExpired ? (
+          // Timer expired - show 3 large circles with voting options
+          <>
+            <p className="mb-8 text-center text-gray-700 font-semibold">How should we proceed with this topic?</p>
+            <div className="flex justify-center gap-6 mb-8">
+              {/* Against - Thumbs Down */}
+              <button
+                onClick={() => handleVoteSubmit('against')}
+                disabled={userVote !== null}
+                className={`flex flex-col items-center gap-3 transition ${
+                  userVote === 'against' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
+                } disabled:cursor-not-allowed`}
+              >
+                <div
+                  className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
+                    userVote === 'against'
+                      ? 'bg-red-600 scale-110'
+                      : 'bg-red-100 hover:bg-red-600'
+                  }`}
+                >
+                  <MaterialSymbol 
+                    name="thumb_down" 
+                    size={40} 
+                    color={userVote === 'against' ? '#ffffff' : '#dc2626'}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">Against</span>
+              </button>
+
+              {/* Neutral - Equal Sign */}
+              <button
+                onClick={() => handleVoteSubmit('neutral')}
+                disabled={userVote !== null}
+                className={`flex flex-col items-center gap-3 transition ${
+                  userVote === 'neutral' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
+                } disabled:cursor-not-allowed`}
+              >
+                <div
+                  className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
+                    userVote === 'neutral'
+                      ? 'bg-yellow-600 scale-110'
+                      : 'bg-yellow-100 hover:bg-yellow-600'
+                  }`}
+                >
+                  <MaterialSymbol 
+                    name="equal" 
+                    size={40} 
+                    color={userVote === 'neutral' ? '#ffffff' : '#ca8a04'}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">Neutral</span>
+              </button>
+
+              {/* Favor - Thumbs Up */}
+              <button
+                onClick={() => handleVoteSubmit('favor')}
+                disabled={userVote !== null}
+                className={`flex flex-col items-center gap-3 transition ${
+                  userVote === 'favor' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
+                } disabled:cursor-not-allowed`}
+              >
+                <div
+                  className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
+                    userVote === 'favor'
+                      ? 'bg-green-600 scale-110'
+                      : 'bg-green-100 hover:bg-green-600'
+                  }`}
+                >
+                  <MaterialSymbol 
+                    name="thumb_up" 
+                    size={40} 
+                    color={userVote === 'favor' ? '#ffffff' : '#16a34a'}
+                  />
+                </div>
+                <span className="text-sm font-semibold text-gray-700">Favor</span>
+              </button>
+            </div>
+
+            {/* Vote Count Display */}
+            <div className="bg-gray-100 rounded-lg p-4 mb-6">
+              <p className="text-center text-sm font-semibold text-gray-700 mb-3">Current Votes</p>
+              <div className="flex justify-around">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{voteCount.against}</div>
+                  <div className="text-xs text-gray-600">Against</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-600">{voteCount.neutral}</div>
+                  <div className="text-xs text-gray-600">Neutral</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{voteCount.favor}</div>
+                  <div className="text-xs text-gray-600">Favor</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Admin Controls - Only show if current user is admin */}
+            {user?.roles?.includes('admin') && (
+              <div className="flex gap-3">
+                <button
+                  onClick={handleAdminContinueDiscussion}
+                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+                >
+                  Continue Discussion
+                </button>
+                <button
+                  onClick={handleAdminFinishDiscussion}
+                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+                >
+                  Finish Discussion
+                </button>
+              </div>
+            )}
+          </>
         ) : (
-          // Initial vote buttons
+          // Finish early - show 2 buttons
           <>
             <p className="mb-6">Should we finish this topic or continue the discussion?</p>
             <div className="flex flex-col gap-3">

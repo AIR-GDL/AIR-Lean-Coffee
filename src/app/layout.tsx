@@ -30,6 +30,16 @@ export default function RootLayout({
     <html lang="en" className={`${openSans.className} h-screen`} suppressHydrationWarning={true}>
       <head>
         <PreloadLink />
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=shield,thumb_up,thumb_down,equal" />
+        <style>{`
+          .material-symbols-rounded {
+            font-variation-settings:
+            'FILL' 0,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24
+          }
+        `}</style>
       </head>
       <body className="antialiased flex flex-col h-screen overflow-hidden" suppressHydrationWarning={true}>
         <PusherProvider>
