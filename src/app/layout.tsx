@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 import Footer from "@/components/Footer";
 import { LoaderProvider } from "@/context/LoaderContext";
+import { PusherProvider } from "@/context/PusherContext";
 import PreloadLink from "@/components/PreloadLink";
 
 const openSans = Open_Sans({
@@ -31,12 +32,13 @@ export default function RootLayout({
         <PreloadLink />
       </head>
       <body className="antialiased flex flex-col h-screen overflow-hidden" suppressHydrationWarning={true}>
-        <LoaderProvider>
-          <main className="flex-1 overflow-hidden">
-            {children}
-          </main>
-          <Footer />
-          <Toaster
+        <PusherProvider>
+          <LoaderProvider>
+            <main className="flex-1 overflow-hidden">
+              {children}
+            </main>
+            <Footer />
+            <Toaster
             position="top-right"
             theme="light"
             richColors
@@ -51,8 +53,9 @@ export default function RootLayout({
                 error: 'group-[.toaster]:bg-red-50 group-[.toaster]:text-red-900 group-[.toaster]:border-red-200',
               },
             }}
-          />
-        </LoaderProvider>
+            />
+          </LoaderProvider>
+        </PusherProvider>
       </body>
     </html>
   );

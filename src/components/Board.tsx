@@ -25,6 +25,9 @@ import BugReportModal from './BugReportModal';
 import ChangelogModal from './ChangelogModal';
 import Image from 'next/image';
 import { useGlobalLoader } from '@/context/LoaderContext';
+import { usePusherTopics, triggerTopicEvent } from '@/hooks/usePusherTopics';
+import { usePusherUsers, triggerUserEvent } from '@/hooks/usePusherUsers';
+import { usePusherTimer, triggerTimerEvent } from '@/hooks/usePusherTimer';
 
 interface BoardProps {
   user: User;
@@ -204,12 +207,16 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     if (!newTopicTitle.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
+    showLoader('Creating topic...');
     try {
-      await createTopic({
+      const newTopic = await createTopic({
         title: newTopicTitle.trim(),
         description: newTopicDescription.trim(),
         author: user.name,
       });
+      
+      // Trigger Pusher event
+      await triggerTopicEvent('topic-created', { topic: newTopic });
       
       await mutate(); // Refresh topics
       setNewTopicTitle('');
@@ -225,6 +232,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleVote = async (topicId: string) => {
+    showLoader('Voting...');
     try {
       const response = await updateTopic(topicId, {
         action: 'VOTE',
@@ -234,12 +242,23 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       // Update local user state with new votes remaining
       if ('user' in response) {
         setUser(response.user);
+        // Trigger Pusher event for votes update
+        await triggerUserEvent('votes-updated', {
+          userId: user._id,
+          votesRemaining: response.user.votesRemaining,
+        });
       }
+
+      // Trigger Pusher event for topic update
+      const updatedTopic = await updateTopic(topicId, {});
+      await triggerTopicEvent('topic-updated', { topic: updatedTopic });
 
       await mutate(); // Refresh topics
     } catch (error) {
       console.error('Failed to vote:', error);
       alert(error instanceof Error ? error.message : 'Failed to vote. Please try again.');
+    } finally {
+      hideLoader();
     }
   };
 
@@ -345,6 +364,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   };
 
   const handleMoveToDiscussed = async (topicId: string) => {
+    showLoader('Moving to discussed...');
     try {
       const topic = topics.find(t => t._id === topicId);
       if (!topic) return;
@@ -356,9 +376,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         totalTime += elapsedSeconds;
       }
 
-      await updateTopic(topicId, {
+      const updatedTopic = await updateTopic(topicId, {
         status: 'discussed',
         totalTimeDiscussed: totalTime,
+      });
+
+      // Trigger Pusher event
+      await triggerTopicEvent('topic-status-changed', {
+        topicId,
+        status: 'discussed',
       });
 
       await mutate(); // Refresh topics
@@ -383,10 +409,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const handleDeleteParticipants = async () => {
     if (selectedParticipants.size === 0) return;
 
+    showLoader('Deleting participants...');
     try {
       // Delete each selected participant
       for (const userId of selectedParticipants) {
         await deleteUser(userId);
+        // Trigger Pusher event for each deleted user
+        await triggerUserEvent('user-left', { userId });
       }
 
       // Refresh users list
@@ -410,11 +439,23 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const { topicId } = pendingTopicMove;
     const now = Date.now();
     
+    showLoader('Starting discussion...');
     try {
-      await updateTopic(topicId, {
+      const updatedTopic = await updateTopic(topicId, {
         status: 'discussing',
         discussionStartTime: now,
         discussionDurationMinutes: timerSettings.durationMinutes,
+      });
+
+      // Trigger Pusher events
+      await triggerTopicEvent('topic-status-changed', {
+        topicId,
+        status: 'discussing',
+      });
+      await triggerTimerEvent('timer-started', {
+        topicId,
+        startTime: now,
+        durationMinutes: timerSettings.durationMinutes,
       });
 
       // Start timer
@@ -451,6 +492,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
     setUserVote(vote);
+    showLoader(vote === 'finish' ? 'Finishing topic...' : 'Continuing discussion...');
     
     // In a real app, this would collect votes from all users
     // For now, we'll simulate immediate action
@@ -467,9 +509,18 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             const currentTopic = topics.find(t => t._id === currentTopicId);
             const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
             
-            await updateTopic(currentTopicId, {
+            const updatedTopic = await updateTopic(currentTopicId, {
               status: 'discussed',
               totalTimeDiscussed: totalTime,
+            });
+
+            // Trigger Pusher events
+            await triggerTopicEvent('topic-status-changed', {
+              topicId: currentTopicId,
+              status: 'discussed',
+            });
+            await triggerTimerEvent('timer-stopped', {
+              topicId: currentTopicId,
             });
 
             await mutate(); // Refresh topics
@@ -511,6 +562,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               remainingSeconds: timerSettings.pausedRemainingSeconds,
               pausedRemainingSeconds: null,
             });
+
+            // Trigger Pusher event for timer resumed
+            if (timerSettings.currentTopicId) {
+              await triggerTimerEvent('timer-started', {
+                topicId: timerSettings.currentTopicId,
+                startTime: newStartTime,
+                durationMinutes: timerSettings.durationMinutes,
+              });
+            }
           }
         }
         hideLoader();
