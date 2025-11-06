@@ -9,6 +9,7 @@ import EditIcon from '@/components/icons/EditIcon';
 import DeleteIcon from '@/components/icons/DeleteIcon';
 import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
 import BugFiltersPanel from '@/components/BugFiltersPanel';
+import { usePusherBugs, triggerBugEvent } from '@/hooks/usePusherBugs';
 
 interface BugReport {
   _id: string;
@@ -60,6 +61,13 @@ export default function BugsPage() {
     fetchBugs();
   }, [router]);
 
+  // Subscribe to Pusher events for real-time updates
+  usePusherBugs({
+    onBugCreated: () => fetchBugs(),
+    onBugUpdated: () => fetchBugs(),
+    onBugDeleted: () => fetchBugs(),
+  });
+
   const fetchBugs = async () => {
     try {
       setIsLoading(true);
@@ -97,6 +105,9 @@ export default function BugsPage() {
 
       if (!response.ok) throw new Error('Failed to update bug');
 
+      // Trigger Pusher event
+      await triggerBugEvent('bug-updated', { bugId: editingBug._id, ...editForm });
+
       setIsEditModalOpen(false);
       setEditingBug(null);
       await fetchBugs();
@@ -120,6 +131,9 @@ export default function BugsPage() {
       });
 
       if (!response.ok) throw new Error('Failed to delete bug');
+
+      // Trigger Pusher event
+      await triggerBugEvent('bug-deleted', { bugId: deletingBugId });
 
       toast.success('Bug report deleted successfully');
       setIsDeleteModalOpen(false);
@@ -176,47 +190,43 @@ export default function BugsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="p-2 hover:bg-gray-200 rounded-lg transition"
-              title="Go back"
-            >
-              <ArrowBackIcon size={24} />
-            </button>
-            <h1 className="text-4xl font-bold text-gray-900">Bug Reports</h1>
-          </div>
-          <div className="text-sm text-gray-600">
-            Total: <span className="font-bold text-lg">{bugs.length}</span>
+    <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
+      {/* Header */}
+      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => router.back()}
+                className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                title="Go back"
+              >
+                <ArrowBackIcon size={24} />
+              </button>
+              <div>
+                <h1 className="text-3xl font-bold" style={{ color: '#005596' }}>
+                  Bug Reports
+                </h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  Total: <span className="font-bold">{bugs.length}</span>
+                </p>
+              </div>
+            </div>
           </div>
         </div>
+      </header>
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-2xl font-semibold text-gray-700">Loading bugs...</div>
-          </div>
-        )}
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-4 py-6 pb-20">
+          <div className="flex gap-6">
+            {/* Filters Panel - Fixed */}
+            <div className="flex-shrink-0 w-64 h-fit sticky top-6">
+              <BugFiltersPanel bugs={bugs} filters={filters} onFiltersChange={setFilters} bugCount={filteredBugs.length} />
+            </div>
 
-        {/* Empty State */}
-        {!isLoading && bugs.length === 0 && (
-          <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-            <BugIcon size={48} color="#9ca3af" />
-            <p className="text-gray-600 mt-4 text-lg">No bug reports yet</p>
-          </div>
-        )}
-
-        {/* Filters and Bugs */}
-        <div className="flex gap-6">
-          {/* Filters Panel */}
-          <BugFiltersPanel bugs={bugs} filters={filters} onFiltersChange={setFilters} bugCount={filteredBugs.length} />
-
-          {/* Main Content */}
-          <div className="flex-1">
+            {/* Bugs List - Scrollable */}
+            <div className="flex-1">
             {/* Loading State */}
             {isLoading && (
               <div className="flex items-center justify-center py-20">
@@ -304,9 +314,10 @@ export default function BugsPage() {
             ))}
               </div>
             )}
+            </div>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Edit Modal */}
       {isEditModalOpen && editingBug && (

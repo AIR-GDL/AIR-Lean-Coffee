@@ -67,7 +67,7 @@ export default function BugFiltersPanel({ filters, onFiltersChange, bugCount }: 
   const isFiltered = filters.severity.length > 0 || filters.status.length > 0 || filters.searchQuery.length > 0;
 
   return (
-    <div className="w-64 bg-white rounded-lg shadow-md p-4 h-fit sticky top-4">
+    <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="mb-4">
         <h2 className="text-lg font-bold text-gray-900 mb-2">Filters</h2>
         <p className="text-sm text-gray-600">Total bugs: {bugCount}</p>

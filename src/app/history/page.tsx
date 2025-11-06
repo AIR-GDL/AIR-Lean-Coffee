@@ -7,6 +7,7 @@ import { fetchDiscussionHistory } from '@/lib/api';
 import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
 import ClockIcon from '@/components/icons/ClockIcon';
 import PersonIcon from '@/components/icons/PersonIcon';
+import { usePusherHistory } from '@/hooks/usePusherHistory';
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -25,10 +26,17 @@ export default function HistoryPage() {
     loadHistory();
   }, [router]);
 
+  // Subscribe to Pusher events for real-time updates
+  usePusherHistory({
+    onHistoryUpdated: () => loadHistory(),
+  });
+
   const loadHistory = async () => {
     try {
       const data = await fetchDiscussionHistory();
-      setHistory(data);
+      // Filter out archived topics
+      const filteredData = data.filter(topic => !topic.archived);
+      setHistory(filteredData);
     } catch (error) {
       console.error('Failed to load history:', error);
     } finally {
@@ -62,10 +70,10 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-5xl mx-auto px-4 py-4">
+      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <button
               onClick={() => router.push('/')}
@@ -87,8 +95,9 @@ export default function HistoryPage() {
       </header>
 
       {/* Content */}
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        {history.length === 0 ? (
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-7xl mx-auto px-4 py-6 pb-20">
+          {history.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
             <div className="text-gray-400 mb-4">
               <ClockIcon size={64} className="mx-auto" />
@@ -140,6 +149,7 @@ export default function HistoryPage() {
             ))}
           </div>
         )}
+        </div>
       </main>
     </div>
   );
