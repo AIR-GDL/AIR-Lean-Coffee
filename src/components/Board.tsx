@@ -282,41 +282,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   // Subscribe to Pusher timer events for real-time synchronization
   usePusherTimer({
     onTimerUpdated: (timerData) => {
-      // Handle timer duration changes (when admin adds more time)
-      if (timerSettings.currentTopicId === timerData.topicId) {
-        const now = Date.now();
-        const startTime = timerData.startTime || now;
-        const durationMinutes = timerData.durationMinutes || 5;
-        const totalMs = durationMinutes * 60 * 1000;
-        const elapsedMs = now - startTime;
-        const remainingMs = Math.max(0, totalMs - elapsedMs);
-        const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
-
-        setTimerSettings({
-          durationMinutes,
-          isRunning: true,
-          startTime,
-          remainingSeconds,
-          currentTopicId: timerData.topicId,
-          isPaused: false,
-          pausedRemainingSeconds: null,
-        });
-        
-        // Close voting modal when timer is updated (admin added more time)
-        setShowVotingModal(false);
-        setUserVote(null);
-        setVoteCount({ against: 0, neutral: 0, favor: 0 });
-        setTimerExpired(false);
-      }
-    },
-    onTimerStarted: (timerData) => {
-      // Always update timer from Pusher to keep all clients in sync
-      // This ensures that after reload, the timer is synchronized with other clients
-      
-      // Use the startTime from the event to calculate remaining seconds
       const now = Date.now();
-      const startTime = timerData.startTime || now;
-      const durationMinutes = timerData.durationMinutes || 5;
+      const startTime = timerData.startTime ?? now;
+      const durationMinutes = timerData.durationMinutes ?? 5;
       const totalMs = durationMinutes * 60 * 1000;
       const elapsedMs = now - startTime;
       const remainingMs = Math.max(0, totalMs - elapsedMs);
@@ -327,10 +295,41 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         isRunning: true,
         startTime,
         remainingSeconds,
-        currentTopicId: timerData.topicId,
+        currentTopicId: timerData.topicId ?? null,
         isPaused: false,
         pausedRemainingSeconds: null,
       });
+
+      setShowVotingModal(false);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
+      setVoteCount({ against: 0, neutral: 0, favor: 0 });
+      setTimerExpired(false);
+    },
+    onTimerStarted: (timerData) => {
+      const now = Date.now();
+      const startTime = timerData.startTime ?? now;
+      const durationMinutes = timerData.durationMinutes ?? 5;
+      const totalMs = durationMinutes * 60 * 1000;
+      const elapsedMs = now - startTime;
+      const remainingMs = Math.max(0, totalMs - elapsedMs);
+      const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+
+      setTimerSettings({
+        durationMinutes,
+        isRunning: true,
+        startTime,
+        remainingSeconds,
+        currentTopicId: timerData.topicId ?? null,
+        isPaused: false,
+        pausedRemainingSeconds: null,
+      });
+
+      setShowVotingModal(false);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
+      setVoteCount({ against: 0, neutral: 0, favor: 0 });
+      setTimerExpired(false);
     },
     onTimerPaused: (timerData) => {
       setTimerSettings({
@@ -342,6 +341,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         remainingSeconds: timerData.remainingSeconds || 0,
         currentTopicId: timerData.topicId,
       });
+
+      setShowVotingModal(false);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
+      setVoteCount({ against: 0, neutral: 0, favor: 0 });
+      setTimerExpired(false);
     },
     onTimerStopped: () => {
       setTimerSettings({
@@ -353,12 +358,24 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         isPaused: false,
         pausedRemainingSeconds: null,
       });
+
+      setShowVotingModal(false);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
+      setVoteCount({ against: 0, neutral: 0, favor: 0 });
+      setTimerExpired(false);
     },
     onDurationChanged: (durationMinutes) => {
       setTimerSettings(prev => ({
         ...prev,
         durationMinutes,
       }));
+
+      setShowVotingModal(false);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
+      setVoteCount({ against: 0, neutral: 0, favor: 0 });
+      setTimerExpired(false);
     },
   });
 
@@ -391,6 +408,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       if (userId === user?._id) {
         setUser(prev => ({ ...prev, votesRemaining }));
       }
+    },
+    onVoteCast: ({ voteCount }) => {
+      setVoteCount(voteCount);
     },
   });
 
