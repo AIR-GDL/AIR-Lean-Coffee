@@ -25,10 +25,12 @@ import ShieldIcon from './icons/ShieldIcon';
 import ThumbsDownIcon from './icons/ThumbsDownIcon';
 import ThumbsUpIcon from './icons/ThumbsUpIcon';
 import EqualIcon from './icons/EqualIcon';
+import SettingsIcon from './icons/SettingsIcon';
 import FeedbackMenu from './FeedbackMenu';
 import BugReportModal from './BugReportModal';
 import ChangelogModal from './ChangelogModal';
-import Image from 'next/image';
+import AppHeader from './AppHeader';
+import SettingsView from './SettingsView';
 import { useGlobalLoader } from '@/context/LoaderContext';
 import { usePusherTopics, triggerTopicEvent } from '@/hooks/usePusherTopics';
 import { usePusherUsers, triggerUserEvent } from '@/hooks/usePusherUsers';
@@ -64,6 +66,17 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const { topics, isLoading, mutate } = useTopics();
   const { users, mutate: mutateUsers } = useUsers();
   const { showLoader, hideLoader } = useGlobalLoader();
+  
+  // Generate unique room ID based on hostname and timestamp
+  // This ensures different browser tabs/sessions have separate rooms
+  const [roomId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const path = window.location.pathname || '/';
+      return `room${path.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+    }
+    return 'room-default';
+  });
+  
   const [user, setUser] = useState<User>(initialUser);
   const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
     durationMinutes: 5,
@@ -92,6 +105,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [showSettingsView, setShowSettingsView] = useState(false);
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -99,7 +113,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   
   // Track if timer has been restored to avoid infinite loops
   const timerRestoredRef = useRef(false);
-  const respondedToSyncRef = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -131,55 +144,34 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         const payload = JSON.stringify({
           event: 'user-left',
           data: { userId },
-          channel: 'users',
+          channel: `users-${roomId}`,
         });
         const blob = new Blob([payload], { type: 'application/json' });
         navigator.sendBeacon('/api/pusher/users', blob);
       } else {
-        void triggerUserEvent('user-left', { userId });
+        void triggerUserEvent('user-left', { userId }, roomId);
       }
     } catch (error) {
       console.error('Failed to send user-left beacon:', error);
-      void triggerUserEvent('user-left', { userId });
+      void triggerUserEvent('user-left', { userId }, roomId);
     }
-  }, []);
+  }, [roomId]);
 
   // Trigger user-joined event when user loads and user-left when unmounts
   useEffect(() => {
     if (initialUser?._id) {
-      respondedToSyncRef.current = false;
-      triggerUserEvent('user-joined', { user: initialUser, requestSync: true });
+      triggerUserEvent('user-joined', { user: initialUser, requestSync: true }, roomId);
+      triggerUserEvent('user-online', { user: initialUser }, roomId);
 
       const handleBeforeUnload = () => {
         sendUserLeftEvent(initialUser._id);
       };
 
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'hidden') {
-          sendUserLeftEvent(initialUser._id);
-          setOnlineUsers(prev => {
-            const newSet = new Set(prev);
-            if (initialUser._id) {
-              newSet.delete(initialUser._id);
-            }
-            return newSet;
-          });
-        } else if (document.visibilityState === 'visible') {
-          respondedToSyncRef.current = false;
-          if (initialUser?._id) {
-            setOnlineUsers(prev => new Set([...prev, initialUser._id]));
-            triggerUserEvent('user-online', { user: initialUser });
-          }
-        }
-      };
-
       window.addEventListener('beforeunload', handleBeforeUnload);
-      document.addEventListener('visibilitychange', handleVisibilityChange);
 
       // Cleanup: trigger user-left when component unmounts
       return () => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
         sendUserLeftEvent(initialUser._id);
         setOnlineUsers(prev => {
           const newSet = new Set(prev);
@@ -188,7 +180,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         });
       };
     }
-  }, [initialUser?._id, sendUserLeftEvent]);
+  }, [initialUser?._id, sendUserLeftEvent, roomId]);
 
   // Update current user when users list changes (vote returns)
   // Also check if user still exists (wasn't deleted by another session)
@@ -363,13 +355,16 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   // Subscribe to Pusher user events for online status
   usePusherUsers({
+    roomId,
     onUserJoined: ({ user: joinedUser, requestSync }) => {
       setOnlineUsers(prev => new Set([...prev, joinedUser._id]));
 
-      if (requestSync && user?._id && user._id !== joinedUser._id && !respondedToSyncRef.current) {
-        respondedToSyncRef.current = true;
-        triggerUserEvent('user-online', { user });
+      if (requestSync && user?._id && user._id !== joinedUser._id) {
+        triggerUserEvent('user-online', { user }, roomId);
       }
+    },
+    onUserOnline: (onlineUser) => {
+      setOnlineUsers(prev => new Set([...prev, onlineUser._id]));
     },
     onUserLeft: (userId) => {
       setOnlineUsers(prev => {
@@ -378,13 +373,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         return newSet;
       });
     },
-    onUserOnline: (onlineUser) => {
-      setOnlineUsers(prev => new Set([...prev, onlineUser._id]));
+    onUserUpdated: (updatedUser) => {
+      if (updatedUser._id === user?._id) {
+        setUser(updatedUser);
+      }
     },
-    onVoteCast: (data) => {
-      // Update vote count from other users
-      if (data.userId !== user?._id) {
-        setVoteCount(data.voteCount);
+    onVotesUpdated: (userId, votesRemaining) => {
+      if (userId === user?._id) {
+        setUser(prev => ({ ...prev, votesRemaining }));
       }
     },
   });
@@ -397,7 +393,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   }, [user?._id]);
 
   // Sort users: online first (admins then users), then offline (admins then users)
-  const getSortedUsers = () => {
+  const sortedUsers = useMemo(() => {
+    console.log('sortedUsers recalculated, onlineUsers size:', onlineUsers.size, 'users length:', users.length);
     return [...users].sort((a, b) => {
       // Online users first
       const aIsOnline = onlineUsers.has(a._id) ? 1 : 0;
@@ -412,7 +409,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       // Then by name
       return a.name.localeCompare(b.name);
     });
-  };
+  }, [users, onlineUsers]);
 
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
@@ -455,7 +452,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       // Update local user state with new votes remaining
       if ('user' in response) {
         setUser(response.user);
-        // Trigger Pusher event for votes update
         await triggerUserEvent('votes-updated', {
           userId: user._id,
           votesRemaining: response.user.votesRemaining,
@@ -620,8 +616,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       // Delete each selected participant
       for (const userId of selectedParticipants) {
         await deleteUser(userId);
-        // Trigger Pusher event for each deleted user
-        await triggerUserEvent('user-left', { userId });
+        await triggerUserEvent('user-left', { userId }, roomId);
+        await triggerUserEvent('user-updated', { user: { _id: userId } });
       }
 
       // Refresh users list
@@ -696,9 +692,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   useEffect(() => {
     if (showVotingModal && timerExpired) {
       // Request sync from other users to get accurate online count
-      triggerUserEvent('user-joined', { user, requestSync: true });
+      triggerUserEvent('user-joined', { user, requestSync: true }, roomId);
     }
-  }, [showVotingModal, timerExpired, user]);
+  }, [showVotingModal, timerExpired, user, roomId]);
 
   const handleVoteSubmit = async (vote: 'finish' | 'continue' | 'against' | 'neutral' | 'favor') => {
     setUserVote(vote);
@@ -717,7 +713,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           userId: user._id,
           vote,
           voteCount: newVoteCount,
-        });
+        }, roomId);
       }
     }
     
@@ -992,48 +988,26 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   const activeTopic = activeId ? topics.find(t => t._id === activeId) : null;
 
+  // Show settings view if requested
+  if (showSettingsView) {
+    return <SettingsView onBack={() => setShowSettingsView(false)} user={user} onLogout={onLogout} />;
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden bg-gradient-to-br from-blue-50 to-sky-50">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Image
-                src="/lean_coffee_logo_long.svg"
-                alt="AIR Lean Coffee"
-                width={150}
-                height={45}
-                priority
-                className="h-12 w-auto"
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-6 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex flex-col justify-center">
-                  <p className="text-xs text-gray-500">Welcome</p>
-                  <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.name}</p>
-                </div>
-                <div className="border-l border-gray-300 pl-6 flex flex-col justify-center">
-                  <p className="text-xs text-gray-500">Votes Remaining</p>
-                  <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
-                </div>
-              </div>
-              <FeedbackMenu
-                onReportBug={() => setShowBugReportModal(true)}
-                onViewChangelog={() => setShowChangelogModal(true)}
-              />
-              <button
-                onClick={handleLogout}
-                className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                title="Logout"
-              >
-                <LogoutIcon size={24} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppHeader user={user} onLogout={onLogout}>
+        <FeedbackMenu
+          onReportBug={() => setShowBugReportModal(true)}
+          onViewChangelog={() => setShowChangelogModal(true)}
+        />
+        <button
+          onClick={() => setShowSettingsView(true)}
+          className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+          title="Settings"
+        >
+          <SettingsIcon size={24} color="currentColor" />
+        </button>
+      </AppHeader>
 
       {/* Timer Display */}
       {timerSettings.isRunning && timerSettings.remainingSeconds !== null && (
@@ -1184,7 +1158,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     )}
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
-                    {getSortedUsers().map((participant) => (
+                    {sortedUsers.map((participant) => (
                       <div
                         key={participant._id}
                         className={`flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0 flex-shrink-0 transition ${
@@ -1214,8 +1188,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                             {participant.roles?.includes('admin') && (
                               <ShieldIcon
                                 size={16}
-                                className="flex-shrink-0"
-                                fill="#2563eb"
+                                color="#2563eb"
                               />
                             )}
                           </div>

@@ -8,6 +8,7 @@ interface UserJoinedPayload {
 }
 
 interface UsePusherUsersProps {
+  roomId?: string; // Room ID to scope the channel
   onUserJoined?: (payload: UserJoinedPayload) => void;
   onUserLeft?: (userId: string) => void;
   onUserUpdated?: (user: User) => void;
@@ -17,6 +18,7 @@ interface UsePusherUsersProps {
 }
 
 export function usePusherUsers({
+  roomId = 'global', // Default to global for backward compatibility
   onUserJoined,
   onUserLeft,
   onUserUpdated,
@@ -33,7 +35,9 @@ export function usePusherUsers({
   }, [onUserJoined, onUserLeft, onUserUpdated, onVotesUpdated, onUserOnline, onVoteCast]);
 
   useEffect(() => {
-    const channel = subscribe('users');
+    // Use room-specific channel
+    const channelName = `users-${roomId}`;
+    const channel = subscribe(channelName);
     if (!channel) return;
 
     if (callbacksRef.current.onUserJoined) {
@@ -79,15 +83,16 @@ export function usePusherUsers({
       if (callbacksRef.current.onVotesUpdated) channel.unbind('votes-updated');
       if (callbacksRef.current.onUserOnline) channel.unbind('user-online');
       if (callbacksRef.current.onVoteCast) channel.unbind('vote-cast');
-      unsubscribe('users');
+      unsubscribe(channelName);
     };
-  }, [subscribe, unsubscribe]);
+  }, [subscribe, unsubscribe, roomId]);
 }
 
 // Helper function to trigger user events
 export async function triggerUserEvent(
   event: 'user-joined' | 'user-left' | 'user-updated' | 'votes-updated' | 'user-online' | 'vote-cast',
-  data: any
+  data: any,
+  roomId: string = 'global' // Default to global for backward compatibility
 ) {
   try {
     await fetch('/api/pusher/users', {
@@ -96,7 +101,7 @@ export async function triggerUserEvent(
       body: JSON.stringify({
         event,
         data,
-        channel: 'users',
+        channel: `users-${roomId}`, // Use room-specific channel
       }),
     });
   } catch (error) {

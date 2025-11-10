@@ -1,26 +1,18 @@
 interface ShieldIconProps {
   size?: number;
-  className?: string;
-  fill?: string;
+  color?: string;
 }
 
-export default function ShieldIcon({
-  size = 18,
-  className = '',
-  fill = '#2563eb',
-}: ShieldIconProps) {
+export default function ShieldIcon({ size = 24, color = 'currentColor' }: ShieldIconProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill={fill}
-      className={className}
-      role="img"
-      aria-hidden="true"
+    <svg 
+      xmlns="http://www.w3.org/2000/svg" 
+      height={`${size}px`} 
+      viewBox="0 -960 960 960" 
+      width={`${size}px`} 
+      fill={color}
     >
-      <path d="M12 2 4 5v6c0 5 3.44 9.74 8 11 4.56-1.26 8-6 8-11V5l-8-3Zm0 2.18 6 2.25v4.57c0 3.96-2.52 7.72-6 8.96-3.48-1.24-6-5-6-8.96V6.43l6-2.25Zm0 3.82a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 2a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />
+      <path d="M480-440q58 0 99-41t41-99q0-58-41-99t-99-41q-58 0-99 41t-41 99q0 58 41 99t99 41Zm0 276q59-19 104.5-59.5T664-315q-43-22-89.5-33.5T480-360q-48 0-94.5 11.5T296-315q34 51 79.5 91.5T480-164Zm0 80q-7 0-13-1t-12-3q-135-45-215-166.5T160-516v-189q0-25 14.5-45t37.5-29l240-90q14-5 28-5t28 5l240 90q23 9 37.5 29t14.5 45v189q0 140-80 261.5T505-88q-6 2-12 3t-13 1Z"/>
     </svg>
   );
 }

@@ -14,6 +14,7 @@ export function useUsers() {
     onUserLeft: () => mutate(),
     onUserUpdated: () => mutate(),
     onVotesUpdated: () => mutate(),
+    onUserOnline: () => mutate(), // Also update when users go online/offline
   });
 
   return {
