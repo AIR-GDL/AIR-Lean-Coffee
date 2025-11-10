@@ -35,6 +35,7 @@ import { useGlobalLoader } from '@/context/LoaderContext';
 import { usePusherTopics, triggerTopicEvent } from '@/hooks/usePusherTopics';
 import { usePusherUsers, triggerUserEvent } from '@/hooks/usePusherUsers';
 import { usePusherTimer, triggerTimerEvent } from '@/hooks/usePusherTimer';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 
 interface BoardProps {
   user: User;
@@ -78,6 +79,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   });
   
   const [user, setUser] = useState<User>(initialUser);
+  const isAdmin = useIsAdmin(user);
   const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
     durationMinutes: 5,
     isRunning: false,
@@ -113,6 +115,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   
   // Track if timer has been restored to avoid infinite loops
   const timerRestoredRef = useRef(false);
+  const durationUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -351,6 +354,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         pausedRemainingSeconds: null,
       });
     },
+    onDurationChanged: (durationMinutes) => {
+      setTimerSettings(prev => ({
+        ...prev,
+        durationMinutes,
+      }));
+    },
   });
 
   // Subscribe to Pusher user events for online status
@@ -527,8 +536,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     // Validate topic exists and is not already in target column
     if (!topic || statusToColumnId(topic.status) === targetColumnId) return;
 
+    if (!isAdmin && (targetColumnId === 'discussing' || targetColumnId === 'discussed')) {
+      return;
+    }
+
     // Only allow moving to "Discussing" from "Top Voted" section (to-discuss with votes)
     if (targetColumnId === 'discussing') {
+      if (!isAdmin) return;
       if (topic.status === 'to-discuss' && topic.votes > 0) {
         setPendingTopicMove({ topicId });
         setShowConfirmDiscussModal(true);
@@ -538,6 +552,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
     // Allow moving between "discussing" and "discussed" columns
     if (targetColumnId === 'discussed') {
+      if (!isAdmin) return;
       if (topic.status === 'discussing') {
         // If timer is running, show voting modal (finish early)
         if (timerSettings.isRunning && timerSettings.currentTopicId === topicId) {
@@ -912,6 +927,33 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     setUserVote(null);
   };
 
+  const handleDurationChange = useCallback((newDuration: number) => {
+    setTimerSettings(prev => ({
+      ...prev,
+      durationMinutes: newDuration,
+    }));
+
+    if (isAdmin) {
+      if (durationUpdateTimeoutRef.current) {
+        clearTimeout(durationUpdateTimeoutRef.current);
+      }
+
+      durationUpdateTimeoutRef.current = setTimeout(() => {
+        void triggerTimerEvent('duration-updated', {
+          durationMinutes: newDuration,
+        });
+      }, 300);
+    }
+  }, [isAdmin, setTimerSettings]);
+
+  useEffect(() => {
+    return () => {
+      if (durationUpdateTimeoutRef.current) {
+        clearTimeout(durationUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleAdminContinueDiscussion = async () => {
     // Admin decides to continue - save votes and show add time slider
     const currentTopicId = timerSettings.currentTopicId;
@@ -1000,13 +1042,15 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           onReportBug={() => setShowBugReportModal(true)}
           onViewChangelog={() => setShowChangelogModal(true)}
         />
-        <button
-          onClick={() => setShowSettingsView(true)}
-          className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-          title="Settings"
-        >
-          <SettingsIcon size={24} color="currentColor" />
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setShowSettingsView(true)}
+            className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+            title="Settings"
+          >
+            <SettingsIcon size={24} color="currentColor" />
+          </button>
+        )}
       </AppHeader>
 
       {/* Timer Display */}
@@ -1067,6 +1111,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               onAddTopic={() => setShowAddTopicModal(true)}
               onUpdate={() => mutate()}
               onDelete={handleDeleteTopic}
+              canManageDiscussions={isAdmin}
             />
 
             <Column
@@ -1077,6 +1122,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               onVote={handleVote}
               onUpdate={() => mutate()}
               onDelete={handleDeleteTopic}
+              canManageDiscussions={isAdmin}
             />
 
             <Column
@@ -1087,6 +1133,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               onVote={handleVote}
               onUpdate={() => mutate()}
               onDelete={handleDeleteTopic}
+              canManageDiscussions={isAdmin}
             />
 
             <Column
@@ -1098,6 +1145,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               onAddTopic={() => router.push('/history')}
               buttonLabel="Discussion History"
               buttonIcon={<HistoryIcon size={20} />}
+              canManageDiscussions={isAdmin}
             >
               <div className="flex flex-col h-full min-h-0 space-y-4">
                 {/* Discussion Duration */}
@@ -1106,21 +1154,31 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     <ClockIcon size={16} />
                     Discussion Duration
                   </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    value={timerSettings.durationMinutes}
-                    onChange={(e) => setTimerSettings({ ...timerSettings, durationMinutes: parseInt(e.target.value) })}
-                    className={`w-full h-2 bg-gray-200 rounded-lg appearance-none ${timerSettings.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    style={{ accentColor: '#005596' }}
-                    disabled={timerSettings.isRunning}
-                  />
-                  <div className="flex justify-between text-xs text-gray-600 mt-1">
-                    <span>1 min</span>
-                    <span className="font-bold" style={{ color: '#005596' }}>{timerSettings.durationMinutes} min</span>
-                    <span>20 min</span>
-                  </div>
+                  {isAdmin ? (
+                    <>
+                      <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        value={timerSettings.durationMinutes}
+                        onChange={(e) => handleDurationChange(parseInt(e.target.value, 10))}
+                        className={`w-full h-2 bg-gray-200 rounded-lg appearance-none ${timerSettings.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        style={{ accentColor: '#005596' }}
+                        disabled={timerSettings.isRunning}
+                      />
+                      <div className="flex justify-between text-xs text-gray-600 mt-1">
+                        <span>1 min</span>
+                        <span className="font-bold" style={{ color: '#005596' }}>{timerSettings.durationMinutes} min</span>
+                        <span>20 min</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="w-full flex items-center justify-center">
+                      <span className="inline-flex items-center justify-center px-4 py-1 text-sm font-semibold text-blue-700 bg-blue-100 rounded-full w-full">
+                        {timerSettings.durationMinutes} minute{timerSettings.durationMinutes !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Participants with scroll */}

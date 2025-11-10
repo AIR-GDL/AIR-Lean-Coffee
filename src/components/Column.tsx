@@ -19,9 +19,10 @@ interface ColumnProps {
   onUpdate?: () => void;
   onDelete?: (topicId: string) => void;
   children?: React.ReactNode;
+  canManageDiscussions?: boolean;
 }
 
-export default function Column({ id, title, topics, user, onVote, onAddTopic, buttonLabel, buttonIcon, onUpdate, onDelete, children }: ColumnProps) {
+export default function Column({ id, title, topics, user, onVote, onAddTopic, buttonLabel, buttonIcon, onUpdate, onDelete, children, canManageDiscussions = false }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ 
     id,
     data: {
@@ -39,7 +40,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, bu
   const regularTopics = !isToDiscussColumn ? topics : [];
 
   // Determine if this column is draggable
-  const isDraggableColumn = id === 'discussing' || id === 'discussed';
+  const isDraggableColumn = (id === 'discussing' || id === 'discussed') && canManageDiscussions;
 
   return (
     <div className={`flex flex-col flex-1 w-full h-full min-h-0 bg-gray-50 rounded-xl shadow-sm transition-all ${

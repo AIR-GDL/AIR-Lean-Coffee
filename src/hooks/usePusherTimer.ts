@@ -15,6 +15,7 @@ interface UsePusherTimerProps {
   onTimerStarted?: (timerData: TimerEvent) => void;
   onTimerPaused?: (timerData: TimerEvent) => void;
   onTimerStopped?: (topicId: string) => void;
+  onDurationChanged?: (durationMinutes: number) => void;
 }
 
 export function usePusherTimer({
@@ -22,14 +23,15 @@ export function usePusherTimer({
   onTimerStarted,
   onTimerPaused,
   onTimerStopped,
+  onDurationChanged,
 }: UsePusherTimerProps) {
   const { subscribe, unsubscribe } = usePusher();
-  const callbacksRef = useRef({ onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped });
+  const callbacksRef = useRef({ onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped, onDurationChanged });
 
   // Update callbacks ref without triggering effect
   useEffect(() => {
-    callbacksRef.current = { onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped };
-  }, [onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped]);
+    callbacksRef.current = { onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped, onDurationChanged };
+  }, [onTimerUpdated, onTimerStarted, onTimerPaused, onTimerStopped, onDurationChanged]);
 
   useEffect(() => {
     const channel = subscribe('timer');
@@ -59,11 +61,18 @@ export function usePusherTimer({
       });
     }
 
+    if (callbacksRef.current.onDurationChanged) {
+      channel.bind('duration-updated', (data: { durationMinutes: number }) => {
+        callbacksRef.current.onDurationChanged?.(data.durationMinutes);
+      });
+    }
+
     return () => {
       if (callbacksRef.current.onTimerUpdated) channel.unbind('timer-updated');
       if (callbacksRef.current.onTimerStarted) channel.unbind('timer-started');
       if (callbacksRef.current.onTimerPaused) channel.unbind('timer-paused');
       if (callbacksRef.current.onTimerStopped) channel.unbind('timer-stopped');
+      if (callbacksRef.current.onDurationChanged) channel.unbind('duration-updated');
       unsubscribe('timer');
     };
   }, [subscribe, unsubscribe]);
@@ -71,7 +80,7 @@ export function usePusherTimer({
 
 // Helper function to trigger timer events
 export async function triggerTimerEvent(
-  event: 'timer-updated' | 'timer-started' | 'timer-paused' | 'timer-stopped',
+  event: 'timer-updated' | 'timer-started' | 'timer-paused' | 'timer-stopped' | 'duration-updated',
   data: any
 ) {
   try {
