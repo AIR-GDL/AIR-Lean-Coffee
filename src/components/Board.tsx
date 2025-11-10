@@ -1557,7 +1557,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   onClick={() => setShowAddTimeSlider(true)}
                   className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2"
                 >
-                  <ClockIcon size={20} color="white" />
+                  <ClockIcon size={20} className="text-white" />
                   Add More Time
                 </button>
                 <button
