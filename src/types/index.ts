@@ -59,6 +59,12 @@ export interface CreateTopicRequest {
   author: string;
 }
 
+export interface VoteCount {
+  against: number;
+  neutral: number;
+  favor: number;
+}
+
 export interface UpdateTopicRequest {
   action?: 'VOTE';
   userEmail?: string;
@@ -69,4 +75,5 @@ export interface UpdateTopicRequest {
   discussionDurationMinutes?: number;
   totalTimeDiscussed?: number;
   archived?: boolean;
+  finalVotes?: VoteCount;
 }
