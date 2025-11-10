@@ -1609,7 +1609,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                     : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
                 } disabled:cursor-not-allowed`}
               >
-                <ClockIcon size={20} color="currentColor" />
+                <ClockIcon size={20} className="text-current" />
                 {userVote === 'continue' ? 'Voted to ' : ''}Continue Topic
               </button>
             </div>
