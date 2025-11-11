@@ -2,14 +2,15 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
+import AppHeader from '@/components/AppHeader';
 import BugIcon from '@/components/icons/BugIcon';
 import CheckIcon from '@/components/icons/CheckIcon';
 import EditIcon from '@/components/icons/EditIcon';
 import DeleteIcon from '@/components/icons/DeleteIcon';
-import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
 import BugFiltersPanel from '@/components/BugFiltersPanel';
 import { usePusherBugs, triggerBugEvent } from '@/hooks/usePusherBugs';
+import Footer from '@/components/Footer';
 
 interface BugReport {
   _id: string;
@@ -191,34 +192,17 @@ export default function BugsPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => router.back()}
-                className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                title="Go back"
-              >
-                <ArrowBackIcon size={24} />
-              </button>
-              <div>
-                <h1 className="text-3xl font-bold" style={{ color: '#005596' }}>
-                  Bug Reports
-                </h1>
-                <p className="text-sm text-gray-600 mt-1">
-                  Total: <span className="font-bold">{bugs.length}</span>
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        variant="secondary"
+        onBack={() => router.back()}
+        title="Bug Reports"
+      />
 
-      {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-4 py-6 pb-20">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <p className="text-sm text-gray-600 mb-6">
+            Total: <span className="font-bold">{bugs.length}</span> bug report{bugs.length !== 1 ? 's' : ''}
+          </p>
           <div className="flex gap-6">
             {/* Filters Panel - Fixed */}
             <div className="flex-shrink-0 w-64 h-fit sticky top-6">
@@ -427,6 +411,9 @@ export default function BugsPage() {
           </div>
         </div>
       )}
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

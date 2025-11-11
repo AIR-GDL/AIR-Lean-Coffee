@@ -4,10 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Topic } from '@/types';
 import { fetchDiscussionHistory } from '@/lib/api';
-import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
+import AppHeader from '@/components/AppHeader';
 import ClockIcon from '@/components/icons/ClockIcon';
 import PersonIcon from '@/components/icons/PersonIcon';
 import { usePusherHistory } from '@/hooks/usePusherHistory';
+import Footer from '@/components/Footer';
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -72,32 +73,17 @@ export default function HistoryPage() {
 
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/')}
-              className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-              title="Back to Board"
-            >
-              <ArrowBackIcon size={24} />
-            </button>
-            <div className="flex-1">
-              <h1 className="text-3xl font-bold" style={{ color: '#005596' }}>
-                Discussion History
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">
-                All completed discussions ({history.length} total)
-              </p>
-            </div>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        variant="secondary"
+        onBack={() => router.push('/')}
+        title="Discussion History"
+      />
 
-      {/* Content */}
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-4 py-6 pb-20">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <p className="text-sm text-gray-600 mb-6">
+            All completed discussions ({history.length} total)
+          </p>
           <div className="flex gap-6">
             {/* Topics List */}
             <div className={`transition-all duration-300 ${selectedTopic ? 'flex-shrink-0 w-1/2' : 'flex-1'}`}>
@@ -217,6 +203,9 @@ export default function HistoryPage() {
           </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

@@ -47,18 +47,7 @@ export default function AppHeader({
               {title && <h1 className="text-2xl font-bold text-gray-900">{title}</h1>}
             </div>
             <div className="flex items-center gap-4">
-              {user && (
-                <div className="flex items-center gap-6 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                  <div className="flex flex-col justify-center">
-                    <p className="text-xs text-gray-500">Welcome</p>
-                    <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.name}</p>
-                  </div>
-                  <div className="border-l border-gray-300 pl-6 flex flex-col justify-center">
-                    <p className="text-xs text-gray-500">Votes Remaining</p>
-                    <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
-                  </div>
-                </div>
-              )}
+              {children}
               {onLogout && (
                 <button
                   onClick={onLogout}

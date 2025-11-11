@@ -36,6 +36,7 @@ import { usePusherTopics, triggerTopicEvent } from '@/hooks/usePusherTopics';
 import { usePusherUsers, triggerUserEvent } from '@/hooks/usePusherUsers';
 import { usePusherTimer, triggerTimerEvent } from '@/hooks/usePusherTimer';
 import { useIsAdmin } from '@/hooks/useIsAdmin';
+import Footer from './Footer';
 
 interface BoardProps {
   user: User;
@@ -124,15 +125,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       },
     })
   );
-
-  // Show loader when loading board
-  useEffect(() => {
-    if (isLoading) {
-      showLoader('Loading board...');
-    } else {
-      hideLoader();
-    }
-  }, [isLoading, showLoader, hideLoader]);
 
   // Update user in state when initialUser changes
   useEffect(() => {
@@ -1050,13 +1042,27 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   const activeTopic = activeId ? topics.find(t => t._id === activeId) : null;
 
+  // Show loader when loading board
+  useEffect(() => {
+    if (isLoading) {
+      showLoader('Loading board...');
+    } else {
+      hideLoader();
+    }
+  }, [isLoading, showLoader, hideLoader]);
+
   // Show settings view if requested
   if (showSettingsView) {
     return <SettingsView onBack={() => setShowSettingsView(false)} user={user} onLogout={onLogout} />;
   }
 
+  // Don't render board UI until data is loaded
+  if (isLoading) {
+    return null;
+  }
+
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden bg-gradient-to-br from-blue-50 to-sky-50">
+    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-sky-50">
       <AppHeader user={user} onLogout={onLogout}>
         <FeedbackMenu
           onReportBug={() => setShowBugReportModal(true)}
@@ -1654,6 +1660,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         isOpen={showChangelogModal}
         onClose={() => setShowChangelogModal(false)}
       />
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

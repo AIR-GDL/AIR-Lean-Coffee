@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AppHeader from './AppHeader';
+import Footer from './Footer';
 import { User } from '@/types';
+import { toast } from '@/lib/toast';
 
 interface AppSettings {
   votesPerUser: number;
@@ -17,33 +19,6 @@ interface SettingsViewProps {
   onLogout: () => void;
 }
 
-// Toast notification function
-const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-  // Create toast element
-  const toast = document.createElement('div');
-  toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full ${
-    type === 'success'
-      ? 'bg-green-500 text-white'
-      : 'bg-red-500 text-white'
-  }`;
-  toast.textContent = message;
-
-  document.body.appendChild(toast);
-
-  // Animate in
-  setTimeout(() => {
-    toast.classList.remove('translate-x-full');
-  }, 100);
-
-  // Remove after 3 seconds
-  setTimeout(() => {
-    toast.classList.add('translate-x-full');
-    setTimeout(() => {
-      document.body.removeChild(toast);
-    }, 300);
-  }, 3000);
-};
-
 export default function SettingsView({ onBack, user, onLogout }: SettingsViewProps) {
   const [settings, setSettings] = useState<AppSettings>({
     votesPerUser: 3,
@@ -51,7 +26,9 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
     maxDiscussionMinutes: 10,
     hideArchivedTopics: false,
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [originalSettings, setOriginalSettings] = useState<AppSettings | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Load settings from API on mount
   useEffect(() => {
@@ -61,10 +38,13 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
         if (response.ok) {
           const data = await response.json();
           setSettings(data);
+          setOriginalSettings(data);
         }
       } catch (error) {
         console.error('Failed to load settings:', error);
-        showToast('Failed to load settings', 'error');
+        toast.error('Failed to load settings');
+      } finally {
+        setIsLoading(false);
       }
     };
     loadSettings();
@@ -77,7 +57,12 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
       return async (settingsToSave: AppSettings) => {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(async () => {
-          setIsLoading(true);
+          // Only save if settings have changed from original
+          if (originalSettings && JSON.stringify(settingsToSave) === JSON.stringify(originalSettings)) {
+            return;
+          }
+
+          setIsSaving(true);
           try {
             const response = await fetch('/api/settings', {
               method: 'POST',
@@ -86,27 +71,30 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
             });
 
             if (response.ok) {
-              showToast('Settings saved automatically');
+              setOriginalSettings(settingsToSave);
+              toast.success('Settings saved');
             } else {
               const error = await response.json();
-              showToast(`Failed to save settings: ${error.error}`, 'error');
+              toast.error(`Failed to save settings: ${error.error}`);
             }
           } catch (error) {
             console.error('Failed to save settings:', error);
-            showToast('Failed to save settings', 'error');
+            toast.error('Failed to save settings');
           } finally {
-            setIsLoading(false);
+            setIsSaving(false);
           }
-        }, 3000); // 3 seconds debounce
+        }, 2000); // 2 seconds debounce
       };
     })(),
-    []
+    [originalSettings]
   );
 
   // Save settings when they change
   useEffect(() => {
-    debouncedSave(settings);
-  }, [settings, debouncedSave]);
+    if (!isLoading && originalSettings) {
+      debouncedSave(settings);
+    }
+  }, [settings, debouncedSave, isLoading, originalSettings]);
 
   const updateSetting = (key: keyof AppSettings, value: any) => {
     setSettings(prev => ({
@@ -123,8 +111,43 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
     updateSetting(key, Math.max(settings[key] as number - 1, min));
   };
 
+  if (isLoading) {
+    return (
+      <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
+        <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={onBack}
+                className="p-2 hover:bg-gray-100 rounded-lg transition"
+                aria-label="Go back"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  height="24px"
+                  viewBox="0 -960 960 960"
+                  width="24px"
+                  fill="currentColor"
+                  className="text-gray-900"
+                >
+                  <path d="m313-440 224 224-57 56-320-320 320-320 57 56-224 224h487v80H313Z"/>
+                </svg>
+              </button>
+              <h1 className="text-2xl font-bold text-gray-900">App Settings</h1>
+            </div>
+          </div>
+        </header>
+        <main className="flex-1 overflow-auto">
+          <div className="max-w-7xl mx-auto px-4 py-8">
+            <p className="text-gray-600">Loading settings...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
       <AppHeader
         variant="secondary"
         user={user}
@@ -134,14 +157,14 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
       />
 
       {/* Settings Content */}
-      <div className="max-w-7xl mx-auto px-6 py-8 flex-1">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">App Settings</h1>
-          <p className="text-gray-600 mt-2">Configure global application settings. Changes are saved automatically.</p>
-          {isLoading && (
-            <p className="text-sm text-blue-600 mt-2">Saving changes...</p>
-          )}
-        </div>
+      <main className="flex-1 overflow-auto">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="mb-8">
+            <p className="text-gray-600 mt-2">Configure global application settings. Changes are saved automatically.</p>
+            {isSaving && (
+              <p className="text-sm text-blue-600 mt-2">Saving changes...</p>
+            )}
+          </div>
 
         {/* Voting Configuration */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
@@ -247,29 +270,31 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
           </div>
         </div>
 
-        {/* Visibility Settings */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Visibility Settings</h2>
+          {/* Visibility Settings */}
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Visibility Settings</h2>
 
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={settings.hideArchivedTopics}
-                onChange={(e) => updateSetting('hideArchivedTopics', e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
-              />
-              <div>
-                <span className="text-sm font-medium text-gray-700">Hide Archived Topics</span>
-                <p className="text-xs text-gray-500 mt-1">
-                  When enabled, topics marked as discussed will not be visible in the main board
-                </p>
-              </div>
-            </label>
+            <div className="space-y-4">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.hideArchivedTopics}
+                  onChange={(e) => updateSetting('hideArchivedTopics', e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                />
+                <div>
+                  <span className="text-sm font-medium text-gray-700">Hide Archived Topics</span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    When enabled, topics marked as discussed will not be visible in the main board
+                  </p>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
+      </main>
 
-      </div>
+      <Footer />
     </div>
   );
 }
