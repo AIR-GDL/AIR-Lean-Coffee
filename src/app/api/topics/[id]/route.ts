@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Topic from '@/models/Topic';
 import User from '@/models/User';
+import pusher from '@/lib/pusher';
+
+// Helper function to trigger Pusher events
+async function triggerPusherEvent(channel: string, event: string, data: any) {
+  try {
+    await pusher.trigger(channel, event, data);
+  } catch (error) {
+    console.error(`Failed to trigger Pusher event ${event}:`, error);
+  }
+}
 
 export async function PUT(
   request: NextRequest,
@@ -117,11 +127,22 @@ export async function PUT(
       
       // Update discussionStartTime if provided (when changing to 'discussing')
       if (discussionStartTime !== undefined) {
-        topic.discussionStartTime = discussionStartTime;
+        // Handle both ISO string and Date formats
+        if (typeof discussionStartTime === 'string') {
+          topic.discussionStartTime = new Date(discussionStartTime);
+        } else if (typeof discussionStartTime === 'number') {
+          topic.discussionStartTime = new Date(discussionStartTime);
+        } else {
+          topic.discussionStartTime = discussionStartTime;
+        }
       }
       
       // Update discussionDurationMinutes if provided (when changing to 'discussing')
+      let durationChanged = false;
       if (discussionDurationMinutes !== undefined) {
+        if (topic.discussionDurationMinutes !== discussionDurationMinutes) {
+          durationChanged = true;
+        }
         topic.discussionDurationMinutes = discussionDurationMinutes;
       }
       
@@ -131,6 +152,15 @@ export async function PUT(
       }
       
       await topic.save();
+
+      // Trigger Pusher events for timer update if duration changed
+      if (durationChanged && topic.status === 'discussing') {
+        await triggerPusherEvent('timer', 'timer-updated', {
+          topicId: id,
+          durationMinutes: topic.discussionDurationMinutes,
+          startTime: topic.discussionStartTime ? new Date(topic.discussionStartTime).getTime() : Date.now(),
+        });
+      }
 
       return NextResponse.json(topic, { status: 200 });
     }

@@ -2,13 +2,16 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { toast } from 'sonner';
+import { toast } from '@/lib/toast';
+import AppHeader from '@/components/AppHeader';
 import BugIcon from '@/components/icons/BugIcon';
 import CheckIcon from '@/components/icons/CheckIcon';
 import EditIcon from '@/components/icons/EditIcon';
 import DeleteIcon from '@/components/icons/DeleteIcon';
-import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
 import BugFiltersPanel from '@/components/BugFiltersPanel';
+import { usePusherBugs, triggerBugEvent } from '@/hooks/usePusherBugs';
+import Footer from '@/components/Footer';
+import Modal from '@/components/Modal';
 
 interface BugReport {
   _id: string;
@@ -60,6 +63,13 @@ export default function BugsPage() {
     fetchBugs();
   }, [router]);
 
+  // Subscribe to Pusher events for real-time updates
+  usePusherBugs({
+    onBugCreated: () => fetchBugs(),
+    onBugUpdated: () => fetchBugs(),
+    onBugDeleted: () => fetchBugs(),
+  });
+
   const fetchBugs = async () => {
     try {
       setIsLoading(true);
@@ -97,6 +107,9 @@ export default function BugsPage() {
 
       if (!response.ok) throw new Error('Failed to update bug');
 
+      // Trigger Pusher event
+      await triggerBugEvent('bug-updated', { bugId: editingBug._id, ...editForm });
+
       setIsEditModalOpen(false);
       setEditingBug(null);
       await fetchBugs();
@@ -120,6 +133,9 @@ export default function BugsPage() {
       });
 
       if (!response.ok) throw new Error('Failed to delete bug');
+
+      // Trigger Pusher event
+      await triggerBugEvent('bug-deleted', { bugId: deletingBugId });
 
       toast.success('Bug report deleted successfully');
       setIsDeleteModalOpen(false);
@@ -176,47 +192,22 @@ export default function BugsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 p-4">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.back()}
-              className="p-2 hover:bg-gray-200 rounded-lg transition"
-              title="Go back"
-            >
-              <ArrowBackIcon size={24} />
-            </button>
-            <h1 className="text-4xl font-bold text-gray-900">Bug Reports</h1>
-          </div>
-          <div className="text-sm text-gray-600">
-            Total: <span className="font-bold text-lg">{bugs.length}</span>
-          </div>
-        </div>
+    <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
+      <AppHeader
+        variant="secondary"
+        onBack={() => router.back()}
+        title="Bug Reports"
+        hideLogout={true}
+      />
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="text-2xl font-semibold text-gray-700">Loading bugs...</div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && bugs.length === 0 && (
-          <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-            <BugIcon size={48} color="#9ca3af" />
-            <p className="text-gray-600 mt-4 text-lg">No bug reports yet</p>
-          </div>
-        )}
-
-        {/* Filters and Bugs */}
-        <div className="flex gap-6">
-          {/* Filters Panel */}
-          <BugFiltersPanel bugs={bugs} filters={filters} onFiltersChange={setFilters} bugCount={filteredBugs.length} />
-
-          {/* Main Content */}
-          <div className="flex-1">
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 py-8">
+          <p className="text-sm text-gray-600 mb-6">
+            Total: <span className="font-bold">{bugs.length}</span> bug report{bugs.length !== 1 ? 's' : ''}
+          </p>
+          <div>
+            {/* Bugs List */}
+            <div>
             {/* Loading State */}
             {isLoading && (
               <div className="flex items-center justify-center py-20">
@@ -304,118 +295,112 @@ export default function BugsPage() {
             ))}
               </div>
             )}
+            </div>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Edit Modal */}
-      {isEditModalOpen && editingBug && (
-        <div className="fixed inset-0 bg-gray-500/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-gray-200 rounded-t-2xl">
-              <h2 className="text-2xl font-bold text-gray-900">Edit Bug Report</h2>
+      <Modal
+        isOpen={isEditModalOpen && !!editingBug}
+        onClose={() => setIsEditModalOpen(false)}
+        title="Edit Bug Report"
+        footer={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setIsEditModalOpen(false)}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveEdit}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              Save Changes
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
+            <input
+              type="text"
+              value={editForm.title}
+              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <textarea
+              value={editForm.description}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              rows={6}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Severity</label>
+              <select
+                value={editForm.severity}
+                onChange={(e) => setEditForm({ ...editForm, severity: e.target.value as 'low' | 'medium' | 'high' })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
             </div>
 
-            {/* Scrolleable Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-4">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
-                  <input
-                    type="text"
-                    value={editForm.title}
-                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    value={editForm.description}
-                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                    rows={6}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Severity</label>
-                    <select
-                      value={editForm.severity}
-                      onChange={(e) => setEditForm({ ...editForm, severity: e.target.value as 'low' | 'medium' | 'high' })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select
-                      value={editForm.status}
-                      onChange={(e) => setEditForm({ ...editForm, status: e.target.value as 'open' | 'in-progress' | 'resolved' })}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="open">Open</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="resolved">Resolved</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Fixed Footer with Buttons */}
-            <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex gap-3 rounded-b-2xl">
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+              <select
+                value={editForm.status}
+                onChange={(e) => setEditForm({ ...editForm, status: e.target.value as 'open' | 'in-progress' | 'resolved' })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-              >
-                Save Changes
-              </button>
+                <option value="open">Open</option>
+                <option value="in-progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+              </select>
             </div>
           </div>
         </div>
-      )}
+      </Modal>
 
       {/* Delete Confirmation Modal */}
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 bg-gray-500/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-xl font-bold text-gray-900">Delete Bug Report</h2>
-            </div>
-            <div className="px-6 py-4">
-              <p className="text-gray-700">Are you sure you want to delete this bug report? This action cannot be undone.</p>
-            </div>
-            <div className="border-t border-gray-200 bg-gray-50 px-6 py-4 flex gap-3 rounded-b-2xl">
-              <button
-                onClick={() => setIsDeleteModalOpen(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
-              >
-                Delete
-              </button>
-            </div>
+      <Modal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        title="Delete Bug Report"
+        maxWidth="md"
+        footer={
+          <div className="flex gap-3">
+            <button
+              onClick={() => setIsDeleteModalOpen(false)}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmDelete}
+              className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+            >
+              Delete
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <p className="text-gray-700">Are you sure you want to delete this bug report? This action cannot be undone.</p>
+      </Modal>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }
