@@ -10,6 +10,7 @@ interface AppHeaderProps {
   title?: string;
   variant?: 'main' | 'secondary'; // main: with logo, secondary: with back button
   children?: ReactNode; // Content projection for additional elements
+  hideLogout?: boolean; // Hide logout button
 }
 
 export default function AppHeader({
@@ -18,7 +19,8 @@ export default function AppHeader({
   onBack,
   title,
   variant = 'main',
-  children
+  children,
+  hideLogout = false
 }: AppHeaderProps) {
   if (variant === 'secondary') {
     return (
@@ -48,15 +50,6 @@ export default function AppHeader({
             </div>
             <div className="flex items-center gap-4">
               {children}
-              {onLogout && (
-                <button
-                  onClick={onLogout}
-                  className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                  title="Logout"
-                >
-                  <LogoutIcon size={24} />
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -93,7 +86,7 @@ export default function AppHeader({
               </div>
             )}
             {children}
-            {onLogout && (
+            {onLogout && !hideLogout && (
               <button
                 onClick={onLogout}
                 className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"

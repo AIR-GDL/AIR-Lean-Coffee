@@ -150,15 +150,13 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
     <div className="h-screen flex flex-col bg-gradient-to-br from-blue-50 to-sky-50">
       <AppHeader
         variant="secondary"
-        user={user}
-        onLogout={onLogout}
         onBack={onBack}
         title="App Settings"
       />
 
       {/* Settings Content */}
       <main className="flex-1 overflow-auto">
-        <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="max-w-3xl mx-auto px-4 py-8">
           <div className="mb-8">
             <p className="text-gray-600 mt-2">Configure global application settings. Changes are saved automatically.</p>
             {isSaving && (
