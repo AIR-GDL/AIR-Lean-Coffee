@@ -2,14 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { User } from '@/types';
-import UserRegistration from '@/components/UserRegistration';
+import { LoginForm } from '@/components/login-form';
 import Board from '@/components/Board';
-import { useGlobalLoader } from '@/context/LoaderContext';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
-  const { showLoader, hideLoader } = useGlobalLoader();
 
   useEffect(() => {
     const loadUserFromSession = () => {
@@ -51,7 +49,13 @@ export default function Home() {
   }
 
   if (!user) {
-    return <UserRegistration onRegister={handleRegister} />;
+    return (
+      <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+        <div className="w-full max-w-sm">
+          <LoginForm onRegister={handleRegister} />
+        </div>
+      </div>
+    );
   }
 
   return <Board user={user} onLogout={handleLogout} />;

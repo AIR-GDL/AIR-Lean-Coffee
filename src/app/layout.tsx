@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Open_Sans } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
-import Footer from "@/components/Footer";
 import { LoaderProvider } from "@/context/LoaderContext";
 import PreloadLink from "@/components/PreloadLink";
 
@@ -35,7 +34,6 @@ export default function RootLayout({
           <main className="flex-1 overflow-hidden">
             {children}
           </main>
-          <Footer />
           <Toaster
             position="top-right"
             theme="light"
