@@ -1,20 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AIR Lean Coffee
 
-## Getting Started
+Aplicación web para reuniones Lean Coffee con timer en tiempo real, votación y sincronización multiusuario.
 
-First, run the development server:
+## 📚 Documentación
+
+- **[`CHANGELOG.md`](./CHANGELOG.md)** - Historial de cambios por versión
+- **[`docs/README-APP.md`](./docs/README-APP.md)** - Documentación completa de la aplicación
+- **[`docs/TESTING-GUIDE.md`](./docs/TESTING-GUIDE.md)** - Guía de pruebas
+- **[`docs/LOADER_USAGE.md`](./docs/LOADER_USAGE.md)** - Guía del sistema de loading
+
+Ver [`docs/README.md`](./docs/README.md) para el índice completo de documentación en la carpeta `docs/`.
+
+## 🚀 Getting Started
+
+Primero, instala las dependencias:
+
+```bash
+npm install
+```
+
+Luego, corre el servidor de desarrollo:
 
 ```bash
 npm run dev
-# or
+# o
 yarn dev
-# or
+# o
 pnpm dev
-# or
+# o
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abre [http://localhost:3000](http://localhost:3000) en tu navegador para ver el resultado.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
