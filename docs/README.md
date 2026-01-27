@@ -1,39 +1,41 @@
-# Documentación del Proyecto AIR Lean Coffee
+# AIR Lean Coffee Project Documentation
 
-Esta carpeta contiene la documentación del proyecto organizada por categorías.
+This folder contains project documentation organized by categories.
 
-## 📋 Archivos de Documentación
+## 📋 Documentation Files
 
-### 📈 Cambios y Versiones
-- **[`../CHANGELOG.md`](../CHANGELOG.md)** - Registro de cambios por versión (en raíz)
-- **[`README-APP.md`](./README-APP.md)** - Documentación detallada de la aplicación
+### 📈 Changes and Versions
+- **[`../CHANGELOG.md`](../CHANGELOG.md)** - Version change log (in root)
+- **[`README-APP.md`](./README-APP.md)** - Detailed application documentation
 
-### 🔧 Fases del Proyecto
-- **PHASE2-MIGRATION.md** - Documentación de la migración inicial
-- **PHASE3-ENHANCEMENTS.md** - Mejoras de la fase 3
-- **PHASE3-TESTING.md** - Pruebas de la fase 3
-- **PHASE4-REFINEMENTS.md** - Refinamientos de la fase 4
-- **PHASE5-ENHANCEMENTS.md** - Mejoras de la fase 5
-- **PHASE6-PROGRESS.md** - Progreso de la fase 6
-- **PHASE7-COMPLETION.md** - Documentación de finalización
-- **PHASE7.1-COMPLETION.md** - Actualizaciones finales de la fase 7.1
+### 🔧 Project Phases
+- **PHASE2-MIGRATION.md** - Initial migration documentation
+- **PHASE3-ENHANCEMENTS.md** - Phase 3 enhancements
+- **PHASE3-TESTING.md** - Phase 3 testing
+- **PHASE4-REFINEMENTS.md** - Phase 4 refinements
+- **PHASE5-ENHANCEMENTS.md** - Phase 5 enhancements
+- **PHASE6-PROGRESS.md** - Phase 6 progress
+- **PHASE7-COMPLETION.md** - Completion documentation
+- **PHASE7.1-COMPLETION.md** - Final phase 7.1 updates
 
-### 🧠 Guías y Tutoriales
-- **LOADER_USAGE.md** - Guía de uso del sistema de loading
-- **TESTING-GUIDE.md** - Guía completa de pruebas
+### 🧠 Guides and Tutorials
+- **[`LOADER_USAGE.md`](./LOADER_USAGE.md)** - Loading system guide
+- **[`TESTING-GUIDE.md`](./TESTING-GUIDE.md)** - Complete testing guide
+- **[`BUN_MIGRATION.md`](./BUN_MIGRATION.md)** - Bun migration guide
 
-### 🚀 Despliegue
-- **VERCEL-DEPLOYMENT-FIXES.md** - Fixes y soluciones para despliegue en Vercel
+### 🚀 Deployment
+- **[`VERCEL-DEPLOYMENT-FIXES.md`](./VERCEL-DEPLOYMENT-FIXES.md)** - Vercel deployment fixes and solutions
 
-## 📚 Navegación
+## 📚 Navigation
 
-Para encontrar información rápidamente:
-1. **Para desarrolladores nuevos**: Comenzar con README-APP.md
-2. **Para historial de cambios**: Revisar CHANGELOG.md
-3. **Para despliegue**: Ver VERCEL-DEPLOYMENT-FIXES.md
-4. **Para implementar features**: Revisar las fases correspondientes
+To find information quickly:
+1. **For new developers**: Start with README-APP.md
+2. **For change history**: Check CHANGELOG.md
+3. **For deployment**: See VERCEL-DEPLOYMENT-FIXES.md
+4. **For package management**: See BUN_MIGRATION.md
+5. **For implementing features**: Review the corresponding phases
 
-## 🔗 Relacionado
+## 🔗 Related
 
-- **README.md** (raíz) - Información general y setup del proyecto
-- **.windsurf/workflows/** - Workflows de desarrollo automatizados
+- **README.md** (root) - General project information and setup
+- **.windsurf/workflows/** - Automated development workflows
