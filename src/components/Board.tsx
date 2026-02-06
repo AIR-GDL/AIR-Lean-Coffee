@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
 import { useUsers } from '@/hooks/useUsers';
 import { createTopic, updateTopic, deleteTopic, deleteUser } from '@/lib/api';
@@ -13,22 +12,24 @@ import Timer from './Timer';
 import Modal from './Modal';
 import confetti from 'canvas-confetti';
 import { useRouter } from 'next/navigation';
-import ClockIcon from './icons/ClockIcon';
-import LogoutIcon from './icons/LogoutIcon';
-import HistoryIcon from './icons/HistoryIcon';
-import PeopleIcon from './icons/PeopleIcon';
 import StopIcon from './icons/StopIcon';
 import CheckIcon from './icons/CheckIcon';
-import DeleteIcon from './icons/DeleteIcon';
-import FeedbackMenu from './FeedbackMenu';
-import BugReportModal from './BugReportModal';
-import ChangelogModal from './ChangelogModal';
-import Image from 'next/image';
 import { useGlobalLoader } from '@/context/LoaderContext';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Separator } from '@/components/ui/separator';
 
 interface BoardProps {
   user: User;
   onLogout: () => void;
+  timerSettings: TimerSettings;
+  setTimerSettings: (value: TimerSettings | ((val: TimerSettings) => TimerSettings)) => void;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  selectedParticipants: Set<string>;
+  setSelectedParticipants: React.Dispatch<React.SetStateAction<Set<string>>>;
+  isSelectMode: boolean;
+  setIsSelectMode: React.Dispatch<React.SetStateAction<boolean>>;
+  showDeleteParticipantsModal: boolean;
+  setShowDeleteParticipantsModal: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 // Helper function to map DB status to column ID
@@ -51,21 +52,24 @@ const columnIdToStatus = (columnId: ColumnType): 'to-discuss' | 'discussing' | '
   return mapping[columnId] || 'to-discuss';
 };
 
-export default function Board({ user: initialUser, onLogout }: BoardProps) {
+export default function Board({ 
+  user: initialUser, 
+  onLogout, 
+  timerSettings, 
+  setTimerSettings,
+  setUser,
+  selectedParticipants,
+  setSelectedParticipants,
+  isSelectMode,
+  setIsSelectMode,
+  showDeleteParticipantsModal,
+  setShowDeleteParticipantsModal,
+}: BoardProps) {
   const router = useRouter();
   const { topics, isLoading, mutate } = useTopics();
   const { users, mutate: mutateUsers } = useUsers();
   const { showLoader, hideLoader } = useGlobalLoader();
-  const [user, setUser] = useState<User>(initialUser);
-  const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
-    durationMinutes: 5,
-    isRunning: false,
-    startTime: null,
-    remainingSeconds: null,
-    currentTopicId: null,
-    isPaused: false,
-    pausedRemainingSeconds: null,
-  });
+  const [user, setLocalUser] = useState<User>(initialUser);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showAddTopicModal, setShowAddTopicModal] = useState(false);
@@ -75,11 +79,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
   const [showAddTimeSlider, setShowAddTimeSlider] = useState(false);
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
-  const [showBugReportModal, setShowBugReportModal] = useState(false);
-  const [showChangelogModal, setShowChangelogModal] = useState(false);
-  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
-  const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
-  const [isSelectMode, setIsSelectMode] = useState(false);
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -569,51 +568,17 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const activeTopic = activeId ? topics.find(t => t._id === activeId) : null;
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden bg-gradient-to-br from-blue-50 to-sky-50">
-      {/* Header */}
-      <header className="flex-shrink-0 bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Image
-                src="/lean_coffee_logo_long.svg"
-                alt="AIR Lean Coffee"
-                width={150}
-                height={45}
-                priority
-                className="h-12 w-auto"
-              />
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-6 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex flex-col justify-center">
-                  <p className="text-xs text-gray-500">Welcome</p>
-                  <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.name}</p>
-                </div>
-                <div className="border-l border-gray-300 pl-6 flex flex-col justify-center">
-                  <p className="text-xs text-gray-500">Votes Remaining</p>
-                  <p className="text-2xl font-bold" style={{ color: '#005596' }}>{user.votesRemaining}/3</p>
-                </div>
-              </div>
-              <FeedbackMenu
-                onReportBug={() => setShowBugReportModal(true)}
-                onViewChangelog={() => setShowChangelogModal(true)}
-              />
-              <button
-                onClick={handleLogout}
-                className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-                title="Logout"
-              >
-                <LogoutIcon size={24} />
-              </button>
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      {/* Header with Sidebar Trigger */}
+      <header className="flex-shrink-0 bg-background sticky top-0 flex h-14 items-center gap-2 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 h-4" />
+        <h1 className="text-lg font-semibold">Lean Coffee Board</h1>
       </header>
 
       {/* Timer Display */}
       {timerSettings.isRunning && timerSettings.remainingSeconds !== null && (
-        <div className="flex-shrink-0 max-w-7xl mx-auto w-full px-4 py-6">
+        <div className="flex-shrink-0 w-full px-4 py-4 bg-background border-b">
           <div className="space-y-4">
             <Timer
               remainingSeconds={timerSettings.remainingSeconds}
@@ -623,14 +588,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             {timerSettings.currentTopicId && (() => {
               const currentTopic = topics.find(t => t._id === timerSettings.currentTopicId);
               return currentTopic ? (
-                <div className="bg-white rounded-xl shadow-lg p-6 border-l-4" style={{ borderLeftColor: '#005596' }}>
+                <div className="bg-card rounded-xl shadow-lg p-6 border-l-4" style={{ borderLeftColor: '#005596' }}>
                   <div className="flex items-start gap-4 min-w-0">
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-2xl font-bold text-gray-900 mb-3 truncate break-words">{currentTopic.title}</h2>
+                      <h2 className="text-2xl font-bold text-foreground mb-3 truncate break-words">{currentTopic.title}</h2>
                       {currentTopic.description && (
-                        <p className="text-gray-700 whitespace-pre-wrap break-words line-clamp-3">{currentTopic.description}</p>
+                        <p className="text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">{currentTopic.description}</p>
                       )}
-                      <p className="text-sm text-gray-500 mt-3 truncate">by {currentTopic.author}</p>
+                      <p className="text-sm text-muted-foreground mt-3 truncate">by {currentTopic.author}</p>
                     </div>
                   </div>
                 </div>
@@ -639,7 +604,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             <div className="flex justify-center">
               <button
                 onClick={handleFinishEarly}
-                className="flex items-center gap-2 px-6 py-3 bg-white border-2 font-semibold rounded-lg hover:bg-gray-50 transition shadow-md"
+                className="flex items-center gap-2 px-6 py-3 bg-card border-2 font-semibold rounded-lg hover:bg-accent transition shadow-md"
                 style={{ borderColor: '#005596', color: '#005596' }}
               >
                 <StopIcon size={20} />
@@ -651,15 +616,14 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       )}
 
       {/* Board */}
-      <main className="flex-1 overflow-hidden min-h-0">
-        <div className="h-full min-h-0 max-w-7xl mx-auto w-full px-4 py-6">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={pointerWithin}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full w-full">
+      <main className="flex-1 overflow-auto min-h-0 p-4">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full w-full">
             <Column
               id="toDiscuss"
               title="To Discuss"
@@ -690,120 +654,20 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               onUpdate={() => mutate()}
               onDelete={handleDeleteTopic}
             />
-
-            <Column
-              id="actions"
-              title="Controls & Info"
-              topics={[]}
-              user={user}
-              onVote={handleVote}
-              onAddTopic={() => router.push('/history')}
-              buttonLabel="Discussion History"
-              buttonIcon={<HistoryIcon size={20} />}
-            >
-              <div className="flex flex-col h-full min-h-0 space-y-4">
-                {/* Discussion Duration */}
-                <div className="flex-shrink-0">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                    <ClockIcon size={16} />
-                    Discussion Duration
-                  </label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="20"
-                    value={timerSettings.durationMinutes}
-                    onChange={(e) => setTimerSettings({ ...timerSettings, durationMinutes: parseInt(e.target.value) })}
-                    className={`w-full h-2 bg-gray-200 rounded-lg appearance-none ${timerSettings.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                    style={{ accentColor: '#005596' }}
-                    disabled={timerSettings.isRunning}
-                  />
-                  <div className="flex justify-between text-xs text-gray-600 mt-1">
-                    <span>1 min</span>
-                    <span className="font-bold" style={{ color: '#005596' }}>{timerSettings.durationMinutes} min</span>
-                    <span>20 min</span>
-                  </div>
-                </div>
-
-                {/* Participants with scroll */}
-                <div className="flex-1 flex flex-col min-h-0">
-                  <div className="flex items-center justify-between mb-2 flex-shrink-0">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                      <PeopleIcon size={16} />
-                      Participants
-                    </label>
-                    {isSelectMode && (
-                      selectedParticipants.size > 0 ? (
-                        <button
-                          onClick={() => setShowDeleteParticipantsModal(true)}
-                          className="p-1 hover:bg-red-100 rounded transition text-red-600"
-                          title="Delete selected participants"
-                        >
-                          <DeleteIcon size={18} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setIsSelectMode(false)}
-                          className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition"
-                        >
-                          Cancel
-                        </button>
-                      )
-                    )}
-                    {!isSelectMode && (
-                      <button
-                        onClick={() => setIsSelectMode(true)}
-                        className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition"
-                      >
-                        Select
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
-                    {users.map((participant) => (
-                      <div
-                        key={participant._id}
-                        className={`flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0 flex-shrink-0 transition ${
-                          isSelectMode ? 'hover:bg-gray-50 cursor-pointer' : ''
-                        }`}
-                        onClick={() => isSelectMode && handleToggleParticipantSelection(participant._id)}
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {isSelectMode && (
-                            <input
-                              type="checkbox"
-                              checked={selectedParticipants.has(participant._id)}
-                              onChange={() => handleToggleParticipantSelection(participant._id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-4 h-4 rounded cursor-pointer"
-                            />
-                          )}
-                          <span className="font-medium text-gray-700 truncate">{participant.name}</span>
-                        </div>
-                        <span className="text-xs font-semibold px-2 py-1 rounded flex-shrink-0" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
-                          {participant.votesRemaining} vote{participant.votesRemaining !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Column>
           </div>
 
-            <DragOverlay>
-              {activeTopic ? (
-                <TopicCard
-                  topic={activeTopic}
-                  user={user}
-                  onVote={() => {}}
-                  canVote={false}
-                  isDraggable={false}
-                />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </div>
+          <DragOverlay>
+            {activeTopic ? (
+              <TopicCard
+                topic={activeTopic}
+                user={user}
+                onVote={() => {}}
+                canVote={false}
+                isDraggable={false}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </main>
 
       {/* Add Topic Modal */}
@@ -814,27 +678,27 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Title *
             </label>
             <input
               type="text"
               value={newTopicTitle}
               onChange={(e) => setNewTopicTitle(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
+              className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:border-transparent bg-background"
               placeholder="Enter topic title"
               autoFocus
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-foreground mb-2">
               Description
             </label>
             <textarea
               value={newTopicDescription}
               onChange={(e) => setNewTopicDescription(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent resize-none"
+              className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:border-transparent resize-none bg-background"
               placeholder="Add additional details (optional)"
               rows={4}
             />
@@ -843,7 +707,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => setShowAddTopicModal(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+              className="flex-1 px-4 py-2 border border-input text-foreground rounded-lg hover:bg-accent transition"
               disabled={isSubmitting}
             >
               Cancel
@@ -851,7 +715,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             <button
               onClick={handleAddTopic}
               disabled={!newTopicTitle.trim() || isSubmitting}
-              className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
+              className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-muted disabled:cursor-not-allowed transition"
               style={{ backgroundColor: !newTopicTitle.trim() || isSubmitting ? undefined : '#005596' }}
             >
               {isSubmitting ? 'Adding...' : 'Add Topic'}
@@ -876,7 +740,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               setShowConfirmDiscussModal(false);
               setPendingTopicMove(null);
             }}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            className="flex-1 px-4 py-2 border border-input text-foreground rounded-lg hover:bg-accent transition"
           >
             Cancel
           </button>
@@ -894,9 +758,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       <Modal
         isOpen={showVotingModal}
         onClose={() => {
-          // Resume timer if it was paused
           if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
-            // Calculate new startTime to maintain the remaining seconds
             const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
             setTimerSettings({
               ...timerSettings,
@@ -915,9 +777,8 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         showCloseButton={true}
       >
         {showAddTimeSlider ? (
-          // Add time slider UI
           <div className="space-y-4">
-            <p className="text-gray-700">Select additional time to continue the discussion:</p>
+            <p className="text-muted-foreground">Select additional time to continue the discussion:</p>
             <div>
               <input
                 type="range"
@@ -925,10 +786,10 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                 max="10"
                 value={additionalMinutes}
                 onChange={(e) => setAdditionalMinutes(parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
                 style={{ accentColor: '#005596' }}
               />
-              <div className="flex justify-between text-xs text-gray-600 mt-1">
+              <div className="flex justify-between text-xs text-muted-foreground mt-1">
                 <span>1 min</span>
                 <span className="font-bold text-lg" style={{ color: '#005596' }}>{additionalMinutes} minutes</span>
                 <span>10 min</span>
@@ -941,7 +802,7 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
                   setShowVotingModal(false);
                   setUserVote(null);
                 }}
-                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+                className="flex-1 px-4 py-3 border border-input text-foreground rounded-lg hover:bg-accent transition"
               >
                 Cancel
               </button>
@@ -955,7 +816,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             </div>
           </div>
         ) : (
-          // Initial vote buttons
           <>
             <p className="mb-6">Should we finish this topic or continue the discussion?</p>
             <div className="flex flex-col gap-3">
@@ -994,13 +854,13 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         onClose={() => setShowDeleteParticipantsModal(false)}
         title="Delete Participants?"
       >
-        <p className="mb-6 text-gray-700">
+        <p className="mb-6 text-muted-foreground">
           Are you sure you want to delete {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''}? This action cannot be undone.
         </p>
         <div className="flex gap-3">
           <button
             onClick={() => setShowDeleteParticipantsModal(false)}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
+            className="flex-1 px-4 py-2 border border-input text-foreground rounded-lg hover:bg-accent transition"
           >
             Cancel
           </button>
@@ -1013,18 +873,6 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
           </button>
         </div>
       </Modal>
-
-      {/* Bug Report Modal */}
-      <BugReportModal
-        isOpen={showBugReportModal}
-        onClose={() => setShowBugReportModal(false)}
-      />
-
-      {/* Changelog Modal */}
-      <ChangelogModal
-        isOpen={showChangelogModal}
-        onClose={() => setShowChangelogModal(false)}
-      />
     </div>
   );
 }
