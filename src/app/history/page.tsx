@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft, Clock, User } from 'lucide-react';
 import { Topic } from '@/types';
 import { fetchDiscussionHistory } from '@/lib/api';
-import ArrowBackIcon from '@/components/icons/ArrowBackIcon';
-import ClockIcon from '@/components/icons/ClockIcon';
-import PersonIcon from '@/components/icons/PersonIcon';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -55,30 +57,31 @@ export default function HistoryPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50 flex items-center justify-center">
-        <div className="text-2xl font-semibold text-gray-700">Loading history...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-2xl font-semibold text-muted-foreground">Loading history...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-sky-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-card border-b shadow-sm">
         <div className="max-w-5xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => router.push('/')}
-              className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
               title="Back to Board"
             >
-              <ArrowBackIcon size={24} />
-            </button>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold" style={{ color: '#005596' }}>
+              <h1 className="text-3xl font-bold text-[#005596]">
                 Discussion History
               </h1>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-muted-foreground mt-1">
                 All completed discussions ({history.length} total)
               </p>
             </div>
@@ -89,54 +92,56 @@ export default function HistoryPage() {
       {/* Content */}
       <main className="max-w-5xl mx-auto px-4 py-8">
         {history.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-12 text-center">
-            <div className="text-gray-400 mb-4">
-              <ClockIcon size={64} className="mx-auto" />
-            </div>
-            <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-              No discussions yet
-            </h2>
-            <p className="text-gray-500">
-              Completed discussions will appear here
-            </p>
-          </div>
+          <Card className="p-12 text-center">
+            <CardContent className="p-0">
+              <Clock className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-2xl font-semibold text-foreground mb-2">
+                No discussions yet
+              </h2>
+              <p className="text-muted-foreground">
+                Completed discussions will appear here
+              </p>
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-4">
             {history.map((topic) => (
-              <div
+              <Card
                 key={topic._id}
-                className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-6 border-l-4"
-                style={{ borderLeftColor: '#005596' }}
+                className="hover:shadow-md transition-shadow border-l-4 border-l-[#005596]"
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">
-                      {topic.title}
-                    </h3>
-                    {topic.description && (
-                      <p className="text-gray-700 mb-3 whitespace-pre-wrap">{topic.description}</p>
-                    )}
-                    <div className="flex items-center gap-6 text-sm text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <PersonIcon size={16} />
-                        <span>{topic.author}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <ClockIcon size={16} />
-                        <span>{formatDate(topic.discussedAt)}</span>
-                      </div>
-                      {topic.votes > 0 && (
-                        <div className="flex items-center gap-1">
-                          <span className="font-semibold" style={{ color: '#005596' }}>
-                            {topic.votes}
-                          </span>
-                          <span>vote{topic.votes !== 1 ? 's' : ''}</span>
-                        </div>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-foreground mb-2">
+                        {topic.title}
+                      </h3>
+                      {topic.description && (
+                        <p className="text-foreground/80 mb-3 whitespace-pre-wrap">{topic.description}</p>
                       )}
+                      <Separator className="my-3" />
+                      <div className="flex items-center gap-6 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4" />
+                          <span>{topic.author}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          <span>{formatDate(topic.discussedAt)}</span>
+                        </div>
+                        {topic.votes > 0 && (
+                          <Badge variant="secondary" className="gap-1">
+                            <span className="font-semibold text-[#005596]">
+                              {topic.votes}
+                            </span>
+                            <span>vote{topic.votes !== 1 ? 's' : ''}</span>
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
