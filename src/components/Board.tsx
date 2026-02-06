@@ -12,11 +12,15 @@ import Timer from './Timer';
 import Modal from './Modal';
 import confetti from 'canvas-confetti';
 import { useRouter } from 'next/navigation';
-import StopIcon from './icons/StopIcon';
-import CheckIcon from './icons/CheckIcon';
+import { Square, Check } from 'lucide-react';
 import { useGlobalLoader } from '@/context/LoaderContext';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
 
 interface BoardProps {
   user: User;
@@ -602,14 +606,15 @@ export default function Board({
               ) : null;
             })()}
             <div className="flex justify-center">
-              <button
+              <Button
+                variant="outline"
                 onClick={handleFinishEarly}
-                className="flex items-center gap-2 px-6 py-3 bg-card border-2 font-semibold rounded-lg hover:bg-accent transition shadow-md"
-                style={{ borderColor: '#005596', color: '#005596' }}
+                className="border-2 border-[#005596] text-[#005596] hover:bg-[#005596]/10 font-semibold shadow-md"
+                size="lg"
               >
-                <StopIcon size={20} />
+                <Square className="h-5 w-5" />
                 Finish Early
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -677,49 +682,45 @@ export default function Board({
         title="Add New Topic"
       >
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Title *
-            </label>
-            <input
-              type="text"
+          <div className="space-y-2">
+            <Label htmlFor="topic-title">Title *</Label>
+            <Input
+              id="topic-title"
               value={newTopicTitle}
               onChange={(e) => setNewTopicTitle(e.target.value)}
-              className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:border-transparent bg-background"
               placeholder="Enter topic title"
               autoFocus
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Description
-            </label>
-            <textarea
+          <div className="space-y-2">
+            <Label htmlFor="topic-description">Description</Label>
+            <Textarea
+              id="topic-description"
               value={newTopicDescription}
               onChange={(e) => setNewTopicDescription(e.target.value)}
-              className="w-full px-4 py-2 border border-input rounded-lg focus:ring-2 focus:border-transparent resize-none bg-background"
               placeholder="Add additional details (optional)"
               rows={4}
+              className="resize-none"
             />
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button
+            <Button
+              variant="outline"
               onClick={() => setShowAddTopicModal(false)}
-              className="flex-1 px-4 py-2 border border-input text-foreground rounded-lg hover:bg-accent transition"
               disabled={isSubmitting}
+              className="flex-1"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleAddTopic}
               disabled={!newTopicTitle.trim() || isSubmitting}
-              className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-muted disabled:cursor-not-allowed transition"
-              style={{ backgroundColor: !newTopicTitle.trim() || isSubmitting ? undefined : '#005596' }}
+              className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
             >
               {isSubmitting ? 'Adding...' : 'Add Topic'}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>
@@ -733,24 +734,24 @@ export default function Board({
         }}
         title="Start Discussion?"
       >
-        <p className="mb-6">Are you sure you want to start discussing this topic?</p>
+        <p className="mb-6 text-muted-foreground">Are you sure you want to start discussing this topic?</p>
         <div className="flex gap-3">
-          <button
+          <Button
+            variant="outline"
             onClick={() => {
               setShowConfirmDiscussModal(false);
               setPendingTopicMove(null);
             }}
-            className="flex-1 px-4 py-2 border border-input text-foreground rounded-lg hover:bg-accent transition"
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleConfirmDiscuss}
-            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition"
-            style={{ backgroundColor: '#005596' }}
+            className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
           >
             Confirm
-          </button>
+          </Button>
         </div>
       </Modal>
 
@@ -779,70 +780,75 @@ export default function Board({
         {showAddTimeSlider ? (
           <div className="space-y-4">
             <p className="text-muted-foreground">Select additional time to continue the discussion:</p>
-            <div>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={additionalMinutes}
-                onChange={(e) => setAdditionalMinutes(parseInt(e.target.value))}
-                className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer"
-                style={{ accentColor: '#005596' }}
+            <div className="space-y-2">
+              <Slider
+                min={1}
+                max={10}
+                step={1}
+                value={[additionalMinutes]}
+                onValueChange={(value) => setAdditionalMinutes(value[0])}
+                className="w-full"
               />
-              <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <div className="flex justify-between text-xs text-muted-foreground">
                 <span>1 min</span>
-                <span className="font-bold text-lg" style={{ color: '#005596' }}>{additionalMinutes} minutes</span>
+                <span className="font-bold text-lg text-[#005596]">{additionalMinutes} minutes</span>
                 <span>10 min</span>
               </div>
             </div>
             <div className="flex gap-3 pt-2">
-              <button
+              <Button
+                variant="outline"
                 onClick={() => {
                   setShowAddTimeSlider(false);
                   setShowVotingModal(false);
                   setUserVote(null);
                 }}
-                className="flex-1 px-4 py-3 border border-input text-foreground rounded-lg hover:bg-accent transition"
+                className="flex-1"
+                size="lg"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleAddTimeConfirm}
-                className="flex-1 px-4 py-3 text-white rounded-lg hover:opacity-90 transition"
-                style={{ backgroundColor: '#005596' }}
+                className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
+                size="lg"
               >
                 Add Time & Continue
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <>
             <p className="mb-6">Should we finish this topic or continue the discussion?</p>
             <div className="flex flex-col gap-3">
-              <button
+              <Button
                 onClick={() => handleVoteSubmit('finish')}
                 disabled={userVote !== null}
-                className={`w-full px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                variant={userVote === 'finish' ? 'default' : 'outline'}
+                className={`w-full font-semibold ${
                   userVote === 'finish'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-green-100 text-green-700 hover:bg-green-600 hover:text-white'
-                } disabled:cursor-not-allowed`}
+                    ? 'bg-green-600 hover:bg-green-600 text-white'
+                    : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-600 hover:text-white hover:border-green-600'
+                }`}
+                size="lg"
               >
-                {userVote === 'finish' && <CheckIcon size={20} color="currentColor" />}
+                {userVote === 'finish' && <Check className="h-5 w-5" />}
                 {userVote === 'finish' ? 'Voted to ' : ''}Finish Topic
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleVoteSubmit('continue')}
                 disabled={userVote !== null}
-                className={`w-full px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+                variant={userVote === 'continue' ? 'default' : 'outline'}
+                className={`w-full font-semibold ${
                   userVote === 'continue'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
-                } disabled:cursor-not-allowed`}
+                    ? 'bg-blue-600 hover:bg-blue-600 text-white'
+                    : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600'
+                }`}
+                size="lg"
               >
-                {userVote === 'continue' && <CheckIcon size={20} color="currentColor" />}
+                {userVote === 'continue' && <Check className="h-5 w-5" />}
                 {userVote === 'continue' ? 'Voted to ' : ''}Continue Discussion
-              </button>
+              </Button>
             </div>
           </>
         )}
@@ -858,19 +864,20 @@ export default function Board({
           Are you sure you want to delete {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''}? This action cannot be undone.
         </p>
         <div className="flex gap-3">
-          <button
+          <Button
+            variant="outline"
             onClick={() => setShowDeleteParticipantsModal(false)}
-            className="flex-1 px-4 py-2 border border-input text-foreground rounded-lg hover:bg-accent transition"
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="destructive"
             onClick={handleDeleteParticipants}
-            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition"
-            style={{ backgroundColor: '#dc2626' }}
+            className="flex-1"
           >
             Delete
-          </button>
+          </Button>
         </div>
       </Modal>
     </div>

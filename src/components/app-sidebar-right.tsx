@@ -11,13 +11,14 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 interface TimerSettings {
   durationMinutes: number;
@@ -69,12 +70,12 @@ export function AppSidebarRight({
   return (
     <Sidebar
       collapsible="none"
-      className="sticky top-0 hidden h-svh border-l lg:flex"
+      className="sticky top-0 hidden h-svh border-l lg:flex overflow-x-hidden"
       {...props}
     >
       <SidebarHeader className="h-16 border-b border-sidebar-border">
-        <div className="flex items-center gap-3 px-3 py-2">
-          <Avatar className="h-10 w-10">
+        <div className="flex items-center gap-3 px-2 py-2">
+          <Avatar className="h-10 w-10 shrink-0">
             <AvatarFallback className="bg-[#005596] text-white font-semibold">
               {getInitials(user.name)}
             </AvatarFallback>
@@ -88,32 +89,29 @@ export function AppSidebarRight({
             size="icon"
             onClick={onLogout}
             title="Logout"
-            className="h-8 w-8 flex-shrink-0"
+            className="h-8 w-8 shrink-0"
           >
             <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </SidebarHeader>
 
-      <SidebarContent>
+      <SidebarContent className="overflow-x-hidden">
         <SidebarGroup>
           <SidebarGroupLabel className="flex items-center gap-2">
-            <span
-              className="inline-flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-white"
-              style={{ backgroundColor: '#005596' }}
-            >
+            <Badge className="bg-[#005596] hover:bg-[#005596] text-white text-xs px-1.5 py-0 h-5">
               {user.votesRemaining}
-            </span>
+            </Badge>
             Votes Remaining
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <div className="px-2">
-              <div className="flex gap-1">
+            <div className="px-3 pt-1">
+              <div className="flex gap-1.5">
                 {[1, 2, 3].map((vote) => (
                   <div
                     key={vote}
                     className={`flex-1 h-2 rounded-full transition-colors ${
-                      vote <= user.votesRemaining ? 'bg-[#005596]' : 'bg-gray-200'
+                      vote <= user.votesRemaining ? 'bg-[#005596]' : 'bg-muted'
                     }`}
                   />
                 ))}
@@ -130,18 +128,15 @@ export function AppSidebarRight({
             Discussion Duration
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <div className="px-2 space-y-2">
-              <input
-                type="range"
-                min="1"
-                max="20"
-                value={timerSettings.durationMinutes}
-                onChange={(e) => onTimerChange(parseInt(e.target.value))}
-                className={`w-full h-2 bg-gray-200 rounded-lg appearance-none ${
-                  timerSettings.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                }`}
-                style={{ accentColor: '#005596' }}
+            <div className="px-3 space-y-3 pt-1">
+              <Slider
+                min={1}
+                max={20}
+                step={1}
+                value={[timerSettings.durationMinutes]}
+                onValueChange={(value) => onTimerChange(value[0])}
                 disabled={timerSettings.isRunning}
+                className="w-full"
               />
               <div className="flex justify-between text-xs text-muted-foreground">
                 <span>1 min</span>
@@ -156,8 +151,8 @@ export function AppSidebarRight({
 
         <SidebarSeparator />
 
-        <SidebarGroup className="flex-1 min-h-0">
-          <SidebarGroupLabel className="flex items-center justify-between">
+        <SidebarGroup className="flex-1 min-h-0 flex flex-col">
+          <SidebarGroupLabel className="flex items-center justify-between shrink-0">
             <span className="flex items-center gap-2">
               <Users className="h-4 w-4" />
               Participants ({participants.length})
@@ -168,7 +163,7 @@ export function AppSidebarRight({
                   variant="ghost"
                   size="icon"
                   onClick={onDeleteParticipants}
-                  className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-100"
+                  className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
                   title="Delete selected"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -184,39 +179,40 @@ export function AppSidebarRight({
               </Button>
             </div>
           </SidebarGroupLabel>
-          <SidebarGroupContent className="flex-1 min-h-0 overflow-hidden">
-            <SidebarMenu className="h-full overflow-y-auto">
-              {participants.map((participant) => (
-                <SidebarMenuItem key={participant._id}>
-                  <SidebarMenuButton
-                    className={`w-full ${isSelectMode ? 'cursor-pointer' : 'cursor-default'}`}
+          <SidebarGroupContent className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
+              <div className="flex flex-col gap-1 px-1">
+                {participants.map((participant) => (
+                  <div
+                    key={participant._id}
+                    className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                      isSelectMode
+                        ? 'cursor-pointer hover:bg-sidebar-accent'
+                        : ''
+                    }`}
                     onClick={() => isSelectMode && onToggleParticipantSelection(participant._id)}
                   >
                     {isSelectMode && (
-                      <input
-                        type="checkbox"
+                      <Checkbox
                         checked={selectedParticipants.has(participant._id)}
-                        onChange={() => onToggleParticipantSelection(participant._id)}
+                        onCheckedChange={() => onToggleParticipantSelection(participant._id)}
                         onClick={(e) => e.stopPropagation()}
-                        className="h-4 w-4 rounded cursor-pointer"
+                        className="shrink-0"
                       />
                     )}
-                    <Avatar className="h-6 w-6">
-                      <AvatarFallback className="text-xs bg-gray-200">
+                    <Avatar className="h-6 w-6 shrink-0">
+                      <AvatarFallback className="text-[10px] bg-muted">
                         {getInitials(participant.name)}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="flex-1 truncate text-sm">{participant.name}</span>
-                    <span
-                      className="text-xs font-semibold px-1.5 py-0.5 rounded"
-                      style={{ backgroundColor: '#e6f2f9', color: '#005596' }}
-                    >
+                    <span className="flex-1 truncate">{participant.name}</span>
+                    <Badge variant="secondary" className="bg-[#e6f2f9] text-[#005596] hover:bg-[#e6f2f9] shrink-0 text-xs px-1.5 py-0 h-5">
                       {participant.votesRemaining}
-                    </span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>

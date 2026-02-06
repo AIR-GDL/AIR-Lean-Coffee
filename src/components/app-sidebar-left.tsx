@@ -39,9 +39,9 @@ export function AppSidebarLeft({
   const router = useRouter();
 
   return (
-    <Sidebar className="border-r-0" {...props}>
+    <Sidebar className="border-r-0 overflow-x-hidden" {...props}>
       <SidebarHeader className="h-16 border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2">
+        <div className="flex items-center gap-2 px-2 py-2 overflow-hidden">
           <Image
             src="/lean_coffee_logo_small.svg"
             alt="AIR Lean Coffee"
