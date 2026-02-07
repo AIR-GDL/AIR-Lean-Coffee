@@ -1,6 +1,63 @@
 # Changelog
 
-All notable changes to AIR Lean Coffee will be documented in this file.
+All notable changes to Lean Coffee will be documented in this file.
+
+## [2.0.0] - 9 Feb 2026
+
+### 🎉 Major Release - Brand Renaming & UI Overhaul
+
+### Changed
+- **Renamed application** from "AIR Lean Coffee" to "Lean Coffee" across all components and documentation
+- **Renamed main board** from "Main Board" to "AIR Board" throughout the application
+- **Updated project branding** with new logo and simplified naming
+
+### Added
+- **Reports SPA route** with D3.js data visualization
+  - Discussions per month chart
+  - Top contributors visualization
+  - Vote distribution analysis
+  - KPI cards with key metrics
+- **Changelog SPA route** converted from modal to full-page experience
+- **Bug History** view integrated into navigation
+- **Real-time Pusher integration** for multi-user synchronization
+  - Timer synchronization across all users
+  - Topic updates in real-time
+  - User presence tracking
+  - Vote synchronization
+
+### 🎨 UI/UX Improvements
+- **Sidebar redesign** with floating dropdown menus
+  - Support section now uses DropdownMenu (shadcn style)
+  - Settings moved from footer to regular menu item
+  - Feedback as standalone menu item
+  - Collapsible to icon-only rail (sidebar-07 style)
+- **Vote circle styling** - voted topics now show #005596 background with white text
+- **Section differentiation** - TOP VOTED section with subtle blue background tint
+- **Horizontal scroll fix** - removed SidebarSeparator overflow issues
+- **Enhanced accessibility** with proper ARIA labels and keyboard navigation
+
+### 🛠️ Technical Improvements
+- **Bun runtime** as default package manager and JavaScript runtime
+- **Next.js 16** App Router optimization
+- **React 19** with latest hooks and patterns
+- **TypeScript strict mode** throughout the application
+- **MCP server integration** for enhanced development experience
+- **Real-time infrastructure** with Pusher channels
+- **Improved error handling** and user feedback
+- **Performance optimizations** for large topic lists
+
+### 📊 New Features
+- **Advanced voting system** with visual feedback
+- **Timer expiration modal** with 3-option voting (Against/Neutral/Favor)
+- **Discussion analytics** and reporting
+- **Enhanced participant management** with role-based permissions
+- **Archive system** for completed discussions
+
+### 🐛 Bug Fixes
+- Fixed horizontal scroll in sidebar
+- Improved mobile responsiveness
+- Enhanced timer synchronization reliability
+- Better state management for real-time updates
 
 ## [1.4.0] - 25 Oct 2025
 
