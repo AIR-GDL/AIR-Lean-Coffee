@@ -9,7 +9,7 @@ import { AppSidebarLeft } from '@/components/app-sidebar-left';
 import { AppSidebarRight } from '@/components/app-sidebar-right';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useUsers } from '@/hooks/useUsers';
-import { usePresenceChannel, usePusher } from '@/hooks/usePusher';
+import { usePresenceChannel } from '@/hooks/usePusher';
 import { EVENTS } from '@/lib/pusher-client';
 import { updateUserRole } from '@/lib/api';
 import BugReportModal from '@/components/BugReportModal';
@@ -100,15 +100,6 @@ export default function Home() {
       console.error('Failed to broadcast event:', error);
     }
   }, []);
-
-  // Listen for duration changes from other admins
-  usePusher({
-    onDurationChanged: (data) => {
-      if (data.changedBy !== user?.email) {
-        setTimerSettings((prev) => ({ ...prev, durationMinutes: data.durationMinutes }));
-      }
-    },
-  });
 
   const handleTimerChange = useCallback((minutes: number) => {
     setTimerSettings((prev) => ({ ...prev, durationMinutes: minutes }));

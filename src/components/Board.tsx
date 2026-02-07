@@ -133,6 +133,11 @@ export default function Board({
     onTopicCreated: () => mutate(),
     onTopicUpdated: () => mutate(),
     onTopicDeleted: () => mutate(),
+    onDurationChanged: (data) => {
+      if (data.changedBy !== user.email) {
+        setTimerSettings((prev: TimerSettings) => ({ ...prev, durationMinutes: data.durationMinutes }));
+      }
+    },
     onUserUpdated: () => mutateUsers(),
     onUserDeleted: () => mutateUsers(),
     onDiscussionStarted: (data) => {
@@ -305,32 +310,29 @@ export default function Board({
 
   // Restore timer if a topic is currently being discussed
   useEffect(() => {
-    if (isLoading || topics.length === 0) {
-      timerRestoredRef.current = false;
-      return;
-    }
+    if (isLoading) return;
 
     const discussingTopic = topics.find(t => t.status === 'discussing');
 
-    // Only restore timer once per discussing topic
-    if (timerRestoredRef.current && timerSettings.currentTopicId === discussingTopic?._id) {
-      return;
-    }
-
     if (!discussingTopic || !discussingTopic.discussionStartTime || !discussingTopic.discussionDurationMinutes) {
-      // If there's no discussing topic or missing data, reset timer only once
-      if (!timerRestoredRef.current) {
-        setTimerSettings({
-          durationMinutes: 5,
+      // No discussing topic — reset timer but preserve durationMinutes
+      if (timerSettings.isRunning || timerSettings.currentTopicId) {
+        setTimerSettings((prev: TimerSettings) => ({
+          ...prev,
           isRunning: false,
           startTime: null,
           remainingSeconds: null,
           currentTopicId: null,
           isPaused: false,
           pausedRemainingSeconds: null,
-        });
-        timerRestoredRef.current = true;
+        }));
       }
+      timerRestoredRef.current = false;
+      return;
+    }
+
+    // Already restored for this exact topic — skip
+    if (timerRestoredRef.current && timerSettings.currentTopicId === discussingTopic._id) {
       return;
     }
 
@@ -341,30 +343,51 @@ export default function Board({
     const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
 
     if (remainingMs <= 0) {
-      setTimerSettings({
-        durationMinutes: discussingTopic.discussionDurationMinutes || 0,
+      setTimerSettings((prev: TimerSettings) => ({
+        ...prev,
+        durationMinutes: discussingTopic.discussionDurationMinutes || prev.durationMinutes,
         isRunning: false,
         isPaused: true,
         startTime: discussingTopic.discussionStartTime || null,
         remainingSeconds: 0,
         pausedRemainingSeconds: 0,
         currentTopicId: discussingTopic._id,
-      });
+      }));
     } else {
-      setTimerSettings({
-        durationMinutes: discussingTopic.discussionDurationMinutes || 0,
+      setTimerSettings((prev: TimerSettings) => ({
+        ...prev,
+        durationMinutes: discussingTopic.discussionDurationMinutes || prev.durationMinutes,
         isRunning: true,
         isPaused: false,
         startTime: now - elapsedMs,
         remainingSeconds,
         pausedRemainingSeconds: null,
         currentTopicId: discussingTopic._id,
-      });
+      }));
     }
 
     timerRestoredRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, topics]);
+
+  // Show admin choice or waiting dialog when timer has expired for a discussing topic
+  useEffect(() => {
+    if (!timerSettings.currentTopicId) return;
+    if (!timerSettings.isPaused || timerSettings.pausedRemainingSeconds !== 0) return;
+    // Timer expired and topic still discussing — show the appropriate dialog
+    if (isAdmin) {
+      if (!showAdminTimerChoice && !showVotingModal) {
+        setShowAdminTimerChoice(true);
+      }
+    } else {
+      if (!showVotingModal && !showAdminTimerChoice) {
+        setShowVotingModal(true);
+        setIsVotingActive(false);
+        setUserVote(null);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerSettings.isPaused, timerSettings.pausedRemainingSeconds, timerSettings.currentTopicId, isAdmin]);
 
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
