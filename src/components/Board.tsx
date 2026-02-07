@@ -12,7 +12,7 @@ import TopicCard from './TopicCard';
 import Timer from './Timer';
 import confetti from 'canvas-confetti';
 import { useRouter } from 'next/navigation';
-import { Square, Check, ShieldCheck } from 'lucide-react';
+import { Square, Check } from 'lucide-react';
 import { useGlobalLoader } from '@/context/LoaderContext';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -426,7 +426,7 @@ export default function Board({
     setActiveId(null);
 
     // Only admins can drag cards between columns
-    if (!user.isAdmin) return;
+    if (!user.roles?.includes('admin')) return;
 
     // If no drop target detected, return early
     if (!over) return;

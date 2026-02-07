@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { LogOut, Clock, Users, Trash2, ShieldCheck } from 'lucide-react';
+import { LogOut, Clock, Users, Trash2, ShieldCheck, UserCog } from 'lucide-react';
 import { User } from '@/types';
 import {
   Sidebar,
@@ -30,6 +30,7 @@ interface Participant {
   name: string;
   email: string;
   votesRemaining: number;
+  roles?: string[];
 }
 
 interface AppSidebarRightProps extends React.ComponentProps<typeof Sidebar> {
@@ -44,6 +45,7 @@ interface AppSidebarRightProps extends React.ComponentProps<typeof Sidebar> {
   onToggleParticipantSelection: (userId: string) => void;
   onDeleteParticipants: () => void;
   onlineUsers: Map<string, string>;
+  onRoleChange: (userId: string, newRole: 'admin' | 'user') => void;
 }
 
 export function AppSidebarRight({
@@ -58,8 +60,11 @@ export function AppSidebarRight({
   onToggleParticipantSelection,
   onDeleteParticipants,
   onlineUsers,
+  onRoleChange,
   ...props
 }: AppSidebarRightProps) {
+  const isAdmin = user.roles?.includes('admin');
+
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -67,6 +72,11 @@ export function AppSidebarRight({
       .join('')
       .toUpperCase()
       .slice(0, 2);
+
+  };
+
+  const isParticipantAdmin = (participant: Participant) => {
+    return participant.roles?.includes('admin');
   };
 
   return (
@@ -130,24 +140,32 @@ export function AppSidebarRight({
             Discussion Duration
           </SidebarGroupLabel>
           <SidebarGroupContent>
-            <div className="px-3 space-y-3 pt-1">
-              <Slider
-                min={1}
-                max={20}
-                step={1}
-                value={[timerSettings.durationMinutes]}
-                onValueChange={(value) => onTimerChange(value[0])}
-                disabled={timerSettings.isRunning}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>1 min</span>
-                <span className="font-bold text-[#005596]">
+            {isAdmin ? (
+              <div className="px-3 space-y-3 pt-1">
+                <Slider
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={[timerSettings.durationMinutes]}
+                  onValueChange={(value) => onTimerChange(value[0])}
+                  disabled={timerSettings.isRunning}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1 min</span>
+                  <span className="font-bold text-[#005596]">
+                    {timerSettings.durationMinutes} min
+                  </span>
+                  <span>20 min</span>
+                </div>
+              </div>
+            ) : (
+              <div className="px-3 pt-1 flex items-center justify-center">
+                <span className="text-3xl font-bold text-[#005596]">
                   {timerSettings.durationMinutes} min
                 </span>
-                <span>20 min</span>
               </div>
-            </div>
+            )}
           </SidebarGroupContent>
         </SidebarGroup>
 
@@ -202,25 +220,37 @@ export function AppSidebarRight({
                         className="shrink-0"
                       />
                     )}
-                    <div className="relative shrink-0">
-                      <Avatar className="h-6 w-6">
-                        <AvatarFallback className="text-[10px] bg-muted">
-                          {getInitials(participant.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar ${
-                          onlineUsers.has(participant.email)
-                            ? 'bg-green-500'
-                            : 'bg-gray-400'
-                        }`}
-                      />
-                    </div>
+                    <Avatar className="h-6 w-6 shrink-0">
+                      <AvatarFallback className={`text-[10px] text-white font-semibold ${
+                        onlineUsers.has(participant.email)
+                          ? 'bg-green-500'
+                          : 'bg-gray-400'
+                      }`}>
+                        {getInitials(participant.name)}
+                      </AvatarFallback>
+                    </Avatar>
                     <span className="flex-1 truncate">{participant.name}</span>
-                    {(participant as User).isAdmin && (
+                    {isParticipantAdmin(participant) && (
                       <span className="shrink-0" aria-label="Admin">
                         <ShieldCheck className="h-3.5 w-3.5 text-[#005596]" />
                       </span>
+                    )}
+                    {isAdmin && !isSelectMode && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 shrink-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRoleChange(
+                            participant._id,
+                            isParticipantAdmin(participant) ? 'user' : 'admin'
+                          );
+                        }}
+                        aria-label={isParticipantAdmin(participant) ? 'Remove admin' : 'Make admin'}
+                      >
+                        <UserCog className="h-3 w-3" />
+                      </Button>
                     )}
                     <Badge variant="secondary" className="bg-[#e6f2f9] text-[#005596] hover:bg-[#e6f2f9] shrink-0 text-xs px-1.5 py-0 h-5">
                       {participant.votesRemaining}

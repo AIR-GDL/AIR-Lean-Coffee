@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { User } from '@/types';
 import { LoginForm } from '@/components/login-form';
 import Board from '@/components/Board';
@@ -10,6 +10,7 @@ import { AppSidebarRight } from '@/components/app-sidebar-right';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useUsers } from '@/hooks/useUsers';
 import { usePresenceChannel } from '@/hooks/usePusher';
+import { updateUserRole } from '@/lib/api';
 import BugReportModal from '@/components/BugReportModal';
 import ChangelogModal from '@/components/ChangelogModal';
 
@@ -105,6 +106,22 @@ export default function Home() {
     }
   };
 
+  const handleRoleChange = useCallback(async (userId: string, newRole: 'admin' | 'user') => {
+    try {
+      const roles = newRole === 'admin' ? ['admin'] : ['user'];
+      const updatedUser = await updateUserRole(userId, roles);
+      await mutateUsers();
+      // If the changed user is the current user, update session
+      if (user && updatedUser.email === user.email) {
+        const newUser = { ...user, roles: updatedUser.roles };
+        setUser(newUser);
+        sessionStorage.setItem('lean-coffee-user', JSON.stringify(newUser));
+      }
+    } catch (error) {
+      console.error('Failed to update user role:', error);
+    }
+  }, [user, mutateUsers]);
+
   if (!isHydrated) {
     return null;
   }
@@ -153,6 +170,7 @@ export default function Home() {
           onToggleParticipantSelection={handleToggleParticipantSelection}
           onDeleteParticipants={handleDeleteParticipants}
           onlineUsers={onlineUsers}
+          onRoleChange={handleRoleChange}
         />
       </SidebarProvider>
 
