@@ -140,67 +140,71 @@ export function AppSidebarRight({
       </SidebarHeader>
 
       <SidebarContent className="overflow-x-hidden">
-        <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2">
-            <Badge className="bg-[#005596] hover:bg-[#005596] text-white text-xs px-1.5 py-0 h-5">
-              {user.votesRemaining}
-            </Badge>
-            Votes Remaining
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="px-3 pt-1">
-              <div className="flex gap-1.5">
-                {[1, 2, 3].map((vote) => (
-                  <div
-                    key={vote}
-                    className={`flex-1 h-2 rounded-full transition-colors ${
-                      vote <= user.votesRemaining ? 'bg-[#005596]' : 'bg-muted'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarSeparator />
-
-        <SidebarGroup>
-          <SidebarGroupLabel className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Discussion Duration
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            {isAdmin ? (
-              <div className="px-3 space-y-3 pt-1">
-                <Slider
-                  min={1}
-                  max={20}
-                  step={1}
-                  value={[timerSettings.durationMinutes]}
-                  onValueChange={(value) => onTimerChange(value[0])}
-                  disabled={timerSettings.isRunning}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>1 min</span>
-                  <span className="font-bold text-[#005596]">
-                    {timerSettings.durationMinutes} min
-                  </span>
-                  <span>20 min</span>
+        {currentView !== 'bugs' && (
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel className="flex items-center gap-2">
+                <Badge className="bg-[#005596] hover:bg-[#005596] text-white text-xs px-1.5 py-0 h-5">
+                  {user.votesRemaining}
+                </Badge>
+                Votes Remaining
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <div className="px-3 pt-1">
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3].map((vote) => (
+                      <div
+                        key={vote}
+                        className={`flex-1 h-2 rounded-full transition-colors ${
+                          vote <= user.votesRemaining ? 'bg-[#005596]' : 'bg-muted'
+                        }`}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div className="px-3 pt-1 flex items-center justify-center">
-                <span className="text-3xl font-bold text-[#005596]">
-                  {timerSettings.durationMinutes} min
-                </span>
-              </div>
-            )}
-          </SidebarGroupContent>
-        </SidebarGroup>
+              </SidebarGroupContent>
+            </SidebarGroup>
 
-        <SidebarSeparator />
+            <SidebarSeparator />
+
+            <SidebarGroup>
+              <SidebarGroupLabel className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                Discussion Duration
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                {isAdmin ? (
+                  <div className="px-3 space-y-3 pt-1">
+                    <Slider
+                      min={1}
+                      max={20}
+                      step={1}
+                      value={[timerSettings.durationMinutes]}
+                      onValueChange={(value) => onTimerChange(value[0])}
+                      disabled={timerSettings.isRunning}
+                      className="w-full"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>1 min</span>
+                      <span className="font-bold text-[#005596]">
+                        {timerSettings.durationMinutes} min
+                      </span>
+                      <span>20 min</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-3 pt-1 flex items-center justify-center">
+                    <span className="text-3xl font-bold text-[#005596]">
+                      {timerSettings.durationMinutes} min
+                    </span>
+                  </div>
+                )}
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarSeparator />
+          </>
+        )}
 
         {currentView === 'bugs' && bugFilters && onBugFiltersChange ? (
           <SidebarGroup className="flex-1 min-h-0 flex flex-col">
@@ -240,12 +244,9 @@ export function AppSidebarRight({
                             }}
                           />
                           <span className="capitalize flex-1">{severity}</span>
-                          <Badge
-                            variant={severity === 'high' ? 'destructive' : 'secondary'}
-                            className={`text-[10px] px-1.5 py-0 h-4 ${severity === 'medium' ? 'bg-yellow-100 text-yellow-800' : severity === 'low' ? 'bg-green-100 text-green-800' : ''}`}
-                          >
-                            {severity === 'high' ? '🔴' : severity === 'medium' ? '🟡' : '🟢'}
-                          </Badge>
+                          <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                            severity === 'high' ? 'bg-red-500' : severity === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+                          }`} />
                         </label>
                       ))}
                     </div>
@@ -266,12 +267,9 @@ export function AppSidebarRight({
                             }}
                           />
                           <span className="capitalize flex-1">{status.replace('-', ' ')}</span>
-                          <Badge
-                            variant="secondary"
-                            className={`text-[10px] px-1.5 py-0 h-4 ${status === 'resolved' ? 'bg-green-100 text-green-800' : status === 'in-progress' ? 'bg-blue-100 text-blue-800' : ''}`}
-                          >
-                            {status === 'resolved' ? '✓' : status === 'in-progress' ? '⟳' : '○'}
-                          </Badge>
+                          <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                            status === 'open' ? 'bg-orange-400' : status === 'in-progress' ? 'bg-blue-500' : 'bg-green-500'
+                          }`} />
                         </label>
                       ))}
                     </div>

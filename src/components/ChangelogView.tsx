@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import React from 'react';
 import { FileText } from 'lucide-react';
 import { formatDate } from '@/lib/date';
 import type { ChangelogEntry } from '@/lib/changelog-parser';
@@ -8,6 +9,46 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
+
+const renderInlineMarkdown = (text: string): React.ReactNode => {
+  const parts: React.ReactNode[] = [];
+  let remaining = text;
+  let key = 0;
+
+  while (remaining.length > 0) {
+    // Bold: **text**
+    const boldMatch = remaining.match(/^([\s\S]*?)\*\*(.+?)\*\*([\s\S]*)/);
+    if (boldMatch) {
+      if (boldMatch[1]) parts.push(boldMatch[1]);
+      parts.push(<strong key={key++} className="font-semibold text-foreground">{boldMatch[2]}</strong>);
+      remaining = boldMatch[3];
+      continue;
+    }
+
+    // Italic: _text_ or *text*
+    const italicMatch = remaining.match(/^([\s\S]*?)(?:_(.+?)_|\*(.+?)\*)([\s\S]*)/);
+    if (italicMatch) {
+      if (italicMatch[1]) parts.push(italicMatch[1]);
+      parts.push(<em key={key++}>{italicMatch[2] || italicMatch[3]}</em>);
+      remaining = italicMatch[4];
+      continue;
+    }
+
+    // Inline code: `text`
+    const codeMatch = remaining.match(/^([\s\S]*?)`(.+?)`([\s\S]*)/);
+    if (codeMatch) {
+      if (codeMatch[1]) parts.push(codeMatch[1]);
+      parts.push(<code key={key++} className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{codeMatch[2]}</code>);
+      remaining = codeMatch[3];
+      continue;
+    }
+
+    parts.push(remaining);
+    break;
+  }
+
+  return parts.length === 1 ? parts[0] : <>{parts}</>;
+};
 
 export default function ChangelogView() {
   const [entries, setEntries] = useState<ChangelogEntry[]>([]);
@@ -87,20 +128,40 @@ export default function ChangelogView() {
             {entries.map((entry) => (
               <Card key={entry.version} className="overflow-hidden">
                 <CardContent className="p-6">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-6">
                     <Badge className="bg-[#005596] hover:bg-[#004478] text-white text-sm px-3 py-1">
                       v{entry.version}
                     </Badge>
                     <span className="text-sm text-muted-foreground">{formatDate(entry.date)}</span>
                   </div>
-                  <ul className="space-y-2">
-                    {entry.changes.map((change, index) => (
-                      <li key={`${entry.version}-${index}`} className="flex items-start gap-3 text-foreground/80">
-                        <span className="text-[#005596] font-bold mt-0.5 flex-shrink-0">•</span>
-                        <span className="break-words">{change}</span>
-                      </li>
+                  <div className="space-y-5">
+                    {entry.sections.map((section, sIdx) => (
+                      <div key={`${entry.version}-s${sIdx}`}>
+                        {section.title && (
+                          <h3 className="text-sm font-semibold text-foreground mb-2 border-b border-border pb-1">
+                            {section.title}
+                          </h3>
+                        )}
+                        {section.items.length > 0 && (
+                          <ul className="space-y-1.5">
+                            {section.items.map((item, iIdx) => {
+                              const isSubItem = item.startsWith('  ');
+                              const displayText = isSubItem ? item.trimStart() : item;
+                              return (
+                                <li
+                                  key={`${entry.version}-s${sIdx}-i${iIdx}`}
+                                  className={`flex items-start gap-2 text-sm text-foreground/80 ${isSubItem ? 'ml-5' : ''}`}
+                                >
+                                  <span className={`mt-1.5 flex-shrink-0 rounded-full ${isSubItem ? 'h-1 w-1 bg-muted-foreground/40' : 'h-1.5 w-1.5 bg-[#005596]'}`} />
+                                  <span className="break-words">{renderInlineMarkdown(displayText)}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </CardContent>
               </Card>
             ))}

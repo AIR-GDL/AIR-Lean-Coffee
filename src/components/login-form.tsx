@@ -7,9 +7,6 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 import {
   Field,
@@ -82,70 +79,87 @@ export function LoginForm({
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
+      <div className="flex justify-center">
+        <Image
+          src="/lean_coffee_logo_small.svg"
+          alt="Lean Coffee"
+          width={96}
+          height={96}
+          priority
+          className="w-48 h-48"
+        />
+      </div>
       <Card>
-        <CardHeader className="text-center">
-          <Image
-            src="/lean_coffee_logo_small.svg"
-            alt="Lean Coffee"
-            width={128}
-            height={128}
-            priority
-            className="w-32 h-32 mx-auto mb-4"
-          />
-          <CardTitle>Welcome to Lean Coffee</CardTitle>
-          <CardDescription>
-            Enter your name and email below to get started
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <form onSubmit={handleSubmit}>
             <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="name">Name</FieldLabel>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Enter your name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className={errors.name ? 'border-red-500' : ''}
-                  required
-                />
-                {errors.name && (
-                  <p className="text-sm text-red-600 mt-1">{errors.name}</p>
-                )}
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="email">Email</FieldLabel>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className={errors.email ? 'border-red-500' : ''}
-                  required
-                />
-                {errors.email && (
-                  <p className="text-sm text-red-600 mt-1">{errors.email}</p>
-                )}
-              </Field>
-              <Field>
-                <Button 
-                  type="submit" 
-                  className="w-full"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? 'Registering...' : 'Get Started'}
-                </Button>
-              </Field>
+              <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-2 text-center">
+                  <h1 className="text-2xl font-bold">Welcome to Lean Coffee</h1>
+                  <p className="text-muted-foreground text-balance text-sm">
+                    Enter your name and email to join the session
+                  </p>
+                </div>
+                <Field>
+                  <FieldLabel htmlFor="name">Name</FieldLabel>
+                  <Input
+                    id="name"
+                    type="text"
+                    placeholder="Enter your name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className={errors.name ? 'border-red-500' : ''}
+                    required
+                  />
+                  {errors.name && (
+                    <p className="text-sm text-red-600 mt-1">{errors.name}</p>
+                  )}
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="email">Email</FieldLabel>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="email@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className={errors.email ? 'border-red-500' : ''}
+                    required
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-red-600 mt-1">{errors.email}</p>
+                  )}
+                </Field>
+                <Field>
+                  <Button 
+                    type="submit" 
+                    className="w-full"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? 'Joining...' : 'Get Started'}
+                  </Button>
+                </Field>
+              </div>
             </FieldGroup>
           </form>
         </CardContent>
       </Card>
-      <p className="text-center text-xs text-muted-foreground">
-        Lean Coffee v{APP_VERSION}
-      </p>
+      <div className="text-center">
+        <p className="text-xs text-muted-foreground">
+          Lean Coffee v{APP_VERSION}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          by{' '}
+          <a 
+            href="https://github.com/cardiadev" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-muted-foreground hover:text-blue-600 transition-colors"
+          >
+            @cardiadev
+          </a>
+        </p>
+      </div>
     </div>
   )
 }
