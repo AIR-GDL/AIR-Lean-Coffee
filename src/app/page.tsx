@@ -6,6 +6,8 @@ import { LoginForm } from '@/components/login-form';
 import Board from '@/components/Board';
 import HistoryView from '@/components/HistoryView';
 import BugsView from '@/components/BugsView';
+import ReportsView from '@/components/ReportsView';
+import ChangelogView from '@/components/ChangelogView';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebarLeft } from '@/components/app-sidebar-left';
 import { AppSidebarRight } from '@/components/app-sidebar-right';
@@ -15,9 +17,8 @@ import { usePresenceChannel } from '@/hooks/usePusher';
 import { EVENTS } from '@/lib/pusher-client';
 import { updateUserRole } from '@/lib/api';
 import BugReportModal from '@/components/BugReportModal';
-import ChangelogModal from '@/components/ChangelogModal';
 
-type ViewType = 'board' | 'history' | 'bugs';
+type ViewType = 'board' | 'history' | 'bugs' | 'reports' | 'changelog';
 
 interface TimerSettings {
   durationMinutes: number;
@@ -33,7 +34,6 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
   const [showBugReportModal, setShowBugReportModal] = useState(false);
-  const [showChangelogModal, setShowChangelogModal] = useState(false);
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
@@ -173,7 +173,6 @@ export default function Home() {
       <SidebarProvider>
         <AppSidebarLeft
           onReportBug={() => setShowBugReportModal(true)}
-          onViewChangelog={() => setShowChangelogModal(true)}
           currentView={currentView}
           onNavigate={setCurrentView}
         />
@@ -194,7 +193,9 @@ export default function Home() {
             />
           )}
           {currentView === 'history' && <HistoryView />}
+          {currentView === 'reports' && <ReportsView />}
           {currentView === 'bugs' && <BugsView filters={bugFilters} />}
+          {currentView === 'changelog' && <ChangelogView />}
         </SidebarInset>
         <AppSidebarRight
           user={user}
@@ -218,11 +219,6 @@ export default function Home() {
       <BugReportModal
         isOpen={showBugReportModal}
         onClose={() => setShowBugReportModal(false)}
-      />
-
-      <ChangelogModal
-        isOpen={showChangelogModal}
-        onClose={() => setShowChangelogModal(false)}
       />
     </>
   );

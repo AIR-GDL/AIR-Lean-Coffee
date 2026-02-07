@@ -73,8 +73,8 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, bu
               {isToDiscussColumn ? (
                 <>
                   {topVotedTopics.length > 0 && (
-                    <div>
-                      <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-2">
+                    <div className="bg-[#005596]/[0.03] -mx-3 px-3 py-3 rounded-lg">
+                      <div className="text-xs font-semibold text-[#005596] uppercase tracking-wider mb-2">
                         Top Voted
                       </div>
                       <SortableContext items={topVotedTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
@@ -97,7 +97,7 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, bu
                   )}
 
                   {newTopics.length > 0 && (
-                    <div>
+                    <div className={topVotedTopics.length > 0 ? 'pt-1' : ''}>
                       <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
                         New Topics
                       </div>

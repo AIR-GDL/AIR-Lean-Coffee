@@ -64,7 +64,7 @@ interface AppSidebarRightProps extends React.ComponentProps<typeof Sidebar> {
   onDeleteParticipants: () => void;
   onlineUsers: Map<string, string>;
   onRoleChange: (userId: string, newRole: 'admin' | 'user') => void;
-  currentView?: 'board' | 'history' | 'bugs';
+  currentView?: 'board' | 'history' | 'bugs' | 'reports' | 'changelog';
   bugFilters?: BugFilters;
   onBugFiltersChange?: (filters: BugFilters) => void;
 }
@@ -392,7 +392,7 @@ export function AppSidebarRight({
 
       <SidebarFooter className="border-t border-sidebar-border">
         <div className="px-3 py-2 text-center text-xs text-muted-foreground">
-          AIR Lean Coffee
+          Lean Coffee
         </div>
       </SidebarFooter>
 

@@ -793,7 +793,7 @@ export default function Board({
       <header className="flex-shrink-0 bg-background sticky top-0 flex h-14 items-center gap-2 border-b px-4">
         <SidebarTrigger className="-ml-1" />
         <Separator orientation="vertical" className="mr-2 h-4" />
-        <h1 className="text-lg font-semibold">Lean Coffee Board</h1>
+        <h1 className="text-lg font-semibold">AIR Board</h1>
       </header>
 
       {/* Timer Display */}

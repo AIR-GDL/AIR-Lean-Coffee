@@ -7,8 +7,11 @@ import {
   History,
   Bug,
   FileText,
-  Plus,
+  BarChart3,
   Settings,
+  LifeBuoy,
+  Send,
+  MoreHorizontal,
 } from 'lucide-react';
 
 import {
@@ -24,19 +27,23 @@ import {
   SidebarRail,
   SidebarSeparator,
 } from '@/components/ui/sidebar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-type ViewType = 'board' | 'history' | 'bugs';
+type ViewType = 'board' | 'history' | 'bugs' | 'reports' | 'changelog';
 
 interface AppSidebarLeftProps extends React.ComponentProps<typeof Sidebar> {
   onReportBug?: () => void;
-  onViewChangelog?: () => void;
   currentView?: ViewType;
   onNavigate?: (view: ViewType) => void;
 }
 
 export function AppSidebarLeft({
   onReportBug,
-  onViewChangelog,
   currentView = 'board',
   onNavigate,
   ...props
@@ -48,44 +55,27 @@ export function AppSidebarLeft({
         <div className="flex items-center gap-2 px-2 py-2 overflow-hidden">
           <Image
             src="/lean_coffee_logo_small.svg"
-            alt="AIR Lean Coffee"
+            alt="Lean Coffee"
             width={40}
             height={40}
             priority
             className="w-10 h-10"
           />
           <div className="flex flex-col">
-            <span className="font-semibold text-sm">AIR Lean Coffee</span>
+            <span className="font-semibold text-sm">Lean Coffee</span>
             <span className="text-xs text-muted-foreground">Improving</span>
           </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Current Board</SidebarGroupLabel>
+          <SidebarGroupLabel>Board</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton isActive={currentView === 'board'} tooltip="Main Board" onClick={() => onNavigate?.('board')}>
+                <SidebarMenuButton isActive={currentView === 'board'} tooltip="AIR Board" onClick={() => onNavigate?.('board')}>
                   <Coffee className="text-[#005596]" />
-                  <span>Main Board</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarSeparator />
-
-        <SidebarGroup>
-          <SidebarGroupLabel>Boards</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton tooltip="Create New Board" disabled>
-                  <Plus />
-                  <span>New Board</span>
-                  <span className="ml-auto text-xs text-muted-foreground">Soon</span>
+                  <span>AIR Board</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -110,12 +100,22 @@ export function AppSidebarLeft({
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
-                  tooltip="Bug Reports"
-                  isActive={currentView === 'bugs'}
-                  onClick={() => onNavigate?.('bugs')}
+                  tooltip="Reports"
+                  isActive={currentView === 'reports'}
+                  onClick={() => onNavigate?.('reports')}
                 >
-                  <Bug />
-                  <span>Bug Reports</span>
+                  <BarChart3 />
+                  <span>Reports</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  tooltip="Changelog"
+                  isActive={currentView === 'changelog'}
+                  onClick={() => onNavigate?.('changelog')}
+                >
+                  <FileText />
+                  <span>Changelog</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -126,15 +126,32 @@ export function AppSidebarLeft({
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="Report a Bug" onClick={onReportBug}>
-                  <Bug />
-                  <span>Report a Bug</span>
-                </SidebarMenuButton>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <SidebarMenuButton tooltip="Support">
+                      <LifeBuoy />
+                      <span>Support</span>
+                      <MoreHorizontal className="ml-auto h-4 w-4" />
+                    </SidebarMenuButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="right" align="start" className="w-48">
+                    <DropdownMenuItem onClick={onReportBug}>
+                      <Bug className="h-4 w-4" />
+                      <span>Report a Bug</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onNavigate?.('bugs')}>
+                      <Bug className="h-4 w-4" />
+                      <span>Bug History</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton tooltip="View Changelog" onClick={onViewChangelog}>
-                  <FileText />
-                  <span>Changelog</span>
+                <SidebarMenuButton tooltip="Feedback" asChild>
+                  <a href="mailto:carlos.diaz@improving.com">
+                    <Send />
+                    <span>Feedback</span>
+                  </a>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>

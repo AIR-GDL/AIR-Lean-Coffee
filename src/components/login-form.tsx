@@ -86,13 +86,13 @@ export function LoginForm({
         <CardHeader className="text-center">
           <Image
             src="/lean_coffee_logo_small.svg"
-            alt="AIR Lean Coffee"
+            alt="Lean Coffee"
             width={128}
             height={128}
             priority
             className="w-32 h-32 mx-auto mb-4"
           />
-          <CardTitle>Welcome to AIR Lean Coffee</CardTitle>
+          <CardTitle>Welcome to Lean Coffee</CardTitle>
           <CardDescription>
             Enter your name and email below to get started
           </CardDescription>
@@ -144,7 +144,7 @@ export function LoginForm({
         </CardContent>
       </Card>
       <p className="text-center text-xs text-muted-foreground">
-        AIR Lean Coffee v{APP_VERSION}
+        Lean Coffee v{APP_VERSION}
       </p>
     </div>
   )

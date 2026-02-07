@@ -177,15 +177,17 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
               onClick={handleVoteClick}
               disabled={!canVote && !hasUserVoted}
               className={`flex items-center justify-center w-8 h-8 shrink-0 rounded-full font-semibold text-xs transition-all duration-300 group ${
-                hasUserVoted
-                  ? 'bg-[#e6f2f9] text-[#005596] hover:bg-destructive hover:text-white cursor-pointer'
+                topic.votes > 0 || hasUserVoted
+                  ? 'cursor-pointer'
                   : canVote
                   ? 'bg-muted text-muted-foreground hover:text-white cursor-pointer'
                   : 'bg-muted text-muted-foreground/50 cursor-not-allowed'
               }`}
               style={
-                hasUserVoted
-                  ? { backgroundColor: '#e6f2f9', color: '#005596' }
+                topic.votes > 0
+                  ? { backgroundColor: '#005596', color: 'white' }
+                  : hasUserVoted
+                  ? { backgroundColor: '#005596', color: 'white' }
                   : {}
               }
               onMouseEnter={(e) => {
@@ -200,9 +202,12 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                 }
               }}
               onMouseLeave={(e) => {
-                if (hasUserVoted) {
-                  e.currentTarget.style.backgroundColor = '#e6f2f9';
-                  e.currentTarget.style.color = '#005596';
+                if (topic.votes > 0) {
+                  e.currentTarget.style.backgroundColor = '#005596';
+                  e.currentTarget.style.color = 'white';
+                } else if (hasUserVoted) {
+                  e.currentTarget.style.backgroundColor = '#005596';
+                  e.currentTarget.style.color = 'white';
                 } else if (canVote && !hasUserVoted) {
                   e.currentTarget.style.backgroundColor = '';
                   e.currentTarget.style.color = '';
