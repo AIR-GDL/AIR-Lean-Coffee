@@ -25,7 +25,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarSeparator,
 } from '@/components/ui/sidebar';
 import {
   DropdownMenu,
@@ -50,22 +49,28 @@ export function AppSidebarLeft({
 }: AppSidebarLeftProps) {
 
   return (
-    <Sidebar className="border-r-0 overflow-x-hidden" {...props}>
+    <Sidebar collapsible="icon" className="border-r-0" {...props}>
       <SidebarHeader className="h-16 border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-2 overflow-hidden">
-          <Image
-            src="/lean_coffee_logo_small.svg"
-            alt="Lean Coffee"
-            width={40}
-            height={40}
-            priority
-            className="w-10 h-10"
-          />
-          <div className="flex flex-col">
-            <span className="font-semibold text-sm">Lean Coffee</span>
-            <span className="text-xs text-muted-foreground">Improving</span>
-          </div>
-        </div>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground" onClick={() => onNavigate?.('board')}>
+              <div className="flex aspect-square size-8 items-center justify-center">
+                <Image
+                  src="/lean_coffee_logo_small.svg"
+                  alt="Lean Coffee"
+                  width={32}
+                  height={32}
+                  priority
+                  className="w-8 h-8"
+                />
+              </div>
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">Lean Coffee</span>
+                <span className="truncate text-xs text-muted-foreground">Improving</span>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -82,7 +87,7 @@ export function AppSidebarLeft({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarSeparator />
+        <div className="mx-2 border-b border-sidebar-border" />
 
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
