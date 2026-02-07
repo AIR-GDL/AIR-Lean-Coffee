@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { LogOut, Clock, Users, Trash2 } from 'lucide-react';
+import { LogOut, Clock, Users, Trash2, ShieldCheck } from 'lucide-react';
 import { User } from '@/types';
 import {
   Sidebar,
@@ -43,6 +43,7 @@ interface AppSidebarRightProps extends React.ComponentProps<typeof Sidebar> {
   onToggleSelectMode: () => void;
   onToggleParticipantSelection: (userId: string) => void;
   onDeleteParticipants: () => void;
+  onlineUsers: Map<string, string>;
 }
 
 export function AppSidebarRight({
@@ -56,6 +57,7 @@ export function AppSidebarRight({
   onToggleSelectMode,
   onToggleParticipantSelection,
   onDeleteParticipants,
+  onlineUsers,
   ...props
 }: AppSidebarRightProps) {
   const getInitials = (name: string) => {
@@ -200,12 +202,26 @@ export function AppSidebarRight({
                         className="shrink-0"
                       />
                     )}
-                    <Avatar className="h-6 w-6 shrink-0">
-                      <AvatarFallback className="text-[10px] bg-muted">
-                        {getInitials(participant.name)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <div className="relative shrink-0">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-[10px] bg-muted">
+                          {getInitials(participant.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-sidebar ${
+                          onlineUsers.has(participant.email)
+                            ? 'bg-green-500'
+                            : 'bg-gray-400'
+                        }`}
+                      />
+                    </div>
                     <span className="flex-1 truncate">{participant.name}</span>
+                    {(participant as User).isAdmin && (
+                      <span className="shrink-0" aria-label="Admin">
+                        <ShieldCheck className="h-3.5 w-3.5 text-[#005596]" />
+                      </span>
+                    )}
                     <Badge variant="secondary" className="bg-[#e6f2f9] text-[#005596] hover:bg-[#e6f2f9] shrink-0 text-xs px-1.5 py-0 h-5">
                       {participant.votesRemaining}
                     </Badge>

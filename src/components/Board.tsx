@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
 import { useTopics } from '@/hooks/useTopics';
 import { useUsers } from '@/hooks/useUsers';
+import { usePusher } from '@/hooks/usePusher';
 import { createTopic, updateTopic, deleteTopic, deleteUser } from '@/lib/api';
 import Column from './Column';
 import TopicCard from './TopicCard';
 import Timer from './Timer';
-import Modal from './Modal';
 import confetti from 'canvas-confetti';
 import { useRouter } from 'next/navigation';
-import { Square, Check } from 'lucide-react';
+import { Square, Check, ShieldCheck } from 'lucide-react';
 import { useGlobalLoader } from '@/context/LoaderContext';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -21,6 +21,24 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { EVENTS } from '@/lib/pusher-client';
 
 interface BoardProps {
   user: User;
@@ -90,6 +108,119 @@ export default function Board({
   
   // Track if timer has been restored to avoid infinite loops
   const timerRestoredRef = useRef(false);
+
+  // Helper to broadcast Pusher events via API
+  const broadcastEvent = useCallback(async (eventName: string, data: Record<string, unknown>) => {
+    try {
+      await fetch('/api/pusher/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventName, data }),
+      });
+    } catch (error) {
+      console.error('Failed to broadcast event:', error);
+    }
+  }, []);
+
+  // Pusher real-time subscriptions
+  usePusher({
+    onTopicCreated: () => mutate(),
+    onTopicUpdated: () => mutate(),
+    onTopicDeleted: () => mutate(),
+    onUserUpdated: () => mutateUsers(),
+    onUserDeleted: () => mutateUsers(),
+    onDiscussionStarted: (data) => {
+      // When another user starts a discussion, sync the timer
+      const now = Date.now();
+      const elapsedMs = now - data.startTime;
+      const totalMs = data.durationMinutes * 60 * 1000;
+      const remainingMs = Math.max(0, totalMs - elapsedMs);
+      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      if (remainingMs > 0) {
+        setTimerSettings({
+          durationMinutes: data.durationMinutes,
+          isRunning: true,
+          isPaused: false,
+          startTime: data.startTime,
+          remainingSeconds,
+          pausedRemainingSeconds: null,
+          currentTopicId: data.topicId,
+        });
+      }
+      mutate();
+    },
+    onDiscussionFinished: () => {
+      // Reset timer and close voting modal for all users
+      setTimerSettings({
+        ...timerSettings,
+        isRunning: false,
+        startTime: null,
+        remainingSeconds: null,
+        currentTopicId: null,
+        isPaused: false,
+        pausedRemainingSeconds: null,
+      });
+      setShowVotingModal(false);
+      setUserVote(null);
+      setShowAddTimeSlider(false);
+      mutate();
+      mutateUsers();
+    },
+    onTimeAdded: (data) => {
+      // Sync added time across all clients
+      setTimerSettings({
+        ...timerSettings,
+        isRunning: true,
+        isPaused: false,
+        startTime: data.newStartTime,
+        remainingSeconds: data.additionalSeconds,
+        pausedRemainingSeconds: null,
+        currentTopicId: data.topicId,
+      });
+      setShowVotingModal(false);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
+    },
+    onVotingStarted: (data) => {
+      // Show voting modal for all users when timer expires or admin finishes early
+      if (data.reason === 'timer-expired') {
+        setTimerSettings({
+          ...timerSettings,
+          isRunning: false,
+          isPaused: true,
+          pausedRemainingSeconds: 0,
+        });
+      }
+      setShowVotingModal(true);
+      setUserVote(null);
+      setShowAddTimeSlider(false);
+    },
+    onVotingResolved: (data) => {
+      if (data.result === 'finish') {
+        // Reset timer and close modal
+        setTimerSettings({
+          ...timerSettings,
+          isRunning: false,
+          startTime: null,
+          remainingSeconds: null,
+          currentTopicId: null,
+          isPaused: false,
+          pausedRemainingSeconds: null,
+        });
+        setShowVotingModal(false);
+        setUserVote(null);
+        setShowAddTimeSlider(false);
+        mutate();
+        mutateUsers();
+        // Confetti for everyone
+        setTimeout(() => {
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        }, 100);
+      }
+      // 'continue' with time added is handled by onTimeAdded
+    },
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -294,6 +425,9 @@ export default function Board({
     const { active, over } = event;
     setActiveId(null);
 
+    // Only admins can drag cards between columns
+    if (!user.isAdmin) return;
+
     // If no drop target detected, return early
     if (!over) return;
 
@@ -331,8 +465,12 @@ export default function Board({
             pausedRemainingSeconds: remainingSeconds,
             remainingSeconds: remainingSeconds,
           });
-          // Show voting modal
-          setShowVotingModal(true);
+          // Broadcast voting-started to all clients
+          broadcastEvent(EVENTS.VOTING_STARTED, {
+            topicId,
+            triggeredBy: user.email,
+            reason: 'finish-early',
+          });
         } else {
           // Allow moving from discussing to discussed (manual move)
           handleMoveToDiscussed(topicId);
@@ -448,109 +586,91 @@ export default function Board({
       isPaused: true,
       pausedRemainingSeconds: 0,
     });
-    setShowVotingModal(true);
-    setUserVote(null);
+    // Broadcast voting-started to all clients
+    broadcastEvent(EVENTS.VOTING_STARTED, {
+      topicId: timerSettings.currentTopicId,
+      triggeredBy: user.email,
+      reason: 'timer-expired',
+    });
   };
 
   const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
     setUserVote(vote);
     
-    // In a real app, this would collect votes from all users
-    // For now, we'll simulate immediate action
-    setTimeout(async () => {
-      if (vote === 'finish') {
-        // Move topic to discussed
-        const currentTopicId = timerSettings.currentTopicId;
-        if (currentTopicId && timerSettings.startTime) {
-          try {
-            // Calculate elapsed time in seconds
-            const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
-            
-            // Get current topic to add to existing time
-            const currentTopic = topics.find(t => t._id === currentTopicId);
-            const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
-            
-            await updateTopic(currentTopicId, {
-              status: 'discussed',
-              totalTimeDiscussed: totalTime,
-            });
-
-            await mutate(); // Refresh topics
-            await mutateUsers(); // Refresh users to update vote counts
-          } catch (error) {
-            console.error('Failed to finish topic:', error);
-          } finally {
-            hideLoader();
-          }
-        }
-
-        // Reset timer
-        setTimerSettings({
-          ...timerSettings,
-          isRunning: false,
-          startTime: null,
-          remainingSeconds: null,
-          currentTopicId: null,
-          isPaused: false,
-          pausedRemainingSeconds: null,
-        });
-      } else {
-        // Continue discussion
-        if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
-          if (timerSettings.pausedRemainingSeconds === 0) {
-            // Timer expired - don't close modal, show add time slider instead
-            setShowAddTimeSlider(true);
-            hideLoader();
-            return; // Exit early, don't close modal
-          } else {
-            // Resume from paused time - continue where it was paused
-            // Calculate new startTime to maintain the remaining seconds
-            const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
-            setTimerSettings({
-              ...timerSettings,
-              isRunning: true,
-              isPaused: false,
-              startTime: newStartTime,
-              remainingSeconds: timerSettings.pausedRemainingSeconds,
-              pausedRemainingSeconds: null,
-            });
-          }
-        }
-        hideLoader();
-      }
-
-      // Close modal first
-      setShowVotingModal(false);
-      setUserVote(null);
-      setShowAddTimeSlider(false);
-
-      // Trigger confetti AFTER modal closes (only for finish action)
-      if (vote === 'finish') {
-        setTimeout(() => {
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
+    if (vote === 'finish') {
+      // Move topic to discussed
+      const currentTopicId = timerSettings.currentTopicId;
+      if (currentTopicId && timerSettings.startTime) {
+        try {
+          const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+          const currentTopic = topics.find(t => t._id === currentTopicId);
+          const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+          
+          await updateTopic(currentTopicId, {
+            status: 'discussed',
+            totalTimeDiscussed: totalTime,
           });
-        }, 100);
+          // discussion-finished event is triggered by the API route
+          // voting-resolved broadcast will sync all clients
+          await broadcastEvent(EVENTS.VOTING_RESOLVED, {
+            topicId: currentTopicId,
+            result: 'finish',
+            resolvedBy: user.email,
+          });
+        } catch (error) {
+          console.error('Failed to finish topic:', error);
+        } finally {
+          hideLoader();
+        }
       }
-    }, 500);
+    } else {
+      // Continue discussion
+      if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
+        if (timerSettings.pausedRemainingSeconds === 0) {
+          // Timer expired - show add time slider
+          setShowAddTimeSlider(true);
+          return;
+        } else {
+          // Resume from paused time
+          const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
+          setTimerSettings({
+            ...timerSettings,
+            isRunning: true,
+            isPaused: false,
+            startTime: newStartTime,
+            remainingSeconds: timerSettings.pausedRemainingSeconds,
+            pausedRemainingSeconds: null,
+          });
+          setShowVotingModal(false);
+          setUserVote(null);
+        }
+      }
+    }
   };
 
   const handleAddTimeConfirm = () => {
-    // Add the selected time and restart timer
-    // Keep the original startTime to track total discussion duration
+    const newStartTime = Date.now();
+    const additionalSeconds = additionalMinutes * 60;
+    
+    // Update local timer
     setTimerSettings({
       ...timerSettings,
       isRunning: true,
       isPaused: false,
-      // Keep original startTime to track total duration
-      remainingSeconds: additionalMinutes * 60,
+      startTime: newStartTime,
+      remainingSeconds: additionalSeconds,
       pausedRemainingSeconds: null,
     });
     setShowAddTimeSlider(false);
     setShowVotingModal(false);
     setUserVote(null);
+
+    // Broadcast time-added to all clients
+    broadcastEvent(EVENTS.TIME_ADDED, {
+      topicId: timerSettings.currentTopicId,
+      additionalSeconds,
+      newStartTime,
+    });
   };
 
   const handleFinishEarly = () => {
@@ -561,8 +681,12 @@ export default function Board({
       isPaused: true,
       pausedRemainingSeconds: timerSettings.remainingSeconds,
     });
-    setShowVotingModal(true);
-    setUserVote(null);
+    // Broadcast voting-started to all clients
+    broadcastEvent(EVENTS.VOTING_STARTED, {
+      topicId: timerSettings.currentTopicId,
+      triggeredBy: user.email,
+      reason: 'finish-early',
+    });
   };
 
   const handleLogout = () => {
@@ -676,90 +800,89 @@ export default function Board({
       </main>
 
       {/* Add Topic Modal */}
-      <Modal
-        isOpen={showAddTopicModal}
-        onClose={() => setShowAddTopicModal(false)}
-        title="Add New Topic"
-      >
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="topic-title">Title *</Label>
-            <Input
-              id="topic-title"
-              value={newTopicTitle}
-              onChange={(e) => setNewTopicTitle(e.target.value)}
-              placeholder="Enter topic title"
-              autoFocus
-            />
-          </div>
+      <Dialog open={showAddTopicModal} onOpenChange={setShowAddTopicModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Topic</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="topic-title">Title *</Label>
+              <Input
+                id="topic-title"
+                value={newTopicTitle}
+                onChange={(e) => setNewTopicTitle(e.target.value)}
+                placeholder="Enter topic title"
+                autoFocus
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="topic-description">Description</Label>
-            <Textarea
-              id="topic-description"
-              value={newTopicDescription}
-              onChange={(e) => setNewTopicDescription(e.target.value)}
-              placeholder="Add additional details (optional)"
-              rows={4}
-              className="resize-none"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="topic-description">Description</Label>
+              <Textarea
+                id="topic-description"
+                value={newTopicDescription}
+                onChange={(e) => setNewTopicDescription(e.target.value)}
+                placeholder="Add additional details (optional)"
+                rows={4}
+                className="resize-none"
+              />
+            </div>
           </div>
-
-          <div className="flex gap-3 pt-2">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setShowAddTopicModal(false)}
               disabled={isSubmitting}
-              className="flex-1"
             >
               Cancel
             </Button>
             <Button
               onClick={handleAddTopic}
               disabled={!newTopicTitle.trim() || isSubmitting}
-              className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
+              className="bg-[#005596] hover:bg-[#004478] text-white"
             >
               {isSubmitting ? 'Adding...' : 'Add Topic'}
             </Button>
-          </div>
-        </div>
-      </Modal>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm Discuss Modal */}
-      <Modal
-        isOpen={showConfirmDiscussModal}
-        onClose={() => {
+      <AlertDialog open={showConfirmDiscussModal} onOpenChange={(open) => {
+        if (!open) {
           setShowConfirmDiscussModal(false);
           setPendingTopicMove(null);
-        }}
-        title="Start Discussion?"
-      >
-        <p className="mb-6 text-muted-foreground">Are you sure you want to start discussing this topic?</p>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => {
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start Discussion?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to start discussing this topic?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
               setShowConfirmDiscussModal(false);
               setPendingTopicMove(null);
-            }}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleConfirmDiscuss}
-            className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
-          >
-            Confirm
-          </Button>
-        </div>
-      </Modal>
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDiscuss}
+              className="bg-[#005596] hover:bg-[#004478]"
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Voting Modal */}
-      <Modal
-        isOpen={showVotingModal}
-        onClose={() => {
-          if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
+      <Dialog open={showVotingModal} onOpenChange={(open) => {
+        if (!open) {
+          if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null && timerSettings.pausedRemainingSeconds > 0) {
             const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
             setTimerSettings({
               ...timerSettings,
@@ -773,113 +896,109 @@ export default function Board({
           setShowVotingModal(false);
           setUserVote(null);
           setShowAddTimeSlider(false);
-        }}
-        title={showAddTimeSlider ? "Add More Time" : "Time's Up! Vote on Next Action"}
-        showCloseButton={true}
-      >
-        {showAddTimeSlider ? (
-          <div className="space-y-4">
-            <p className="text-muted-foreground">Select additional time to continue the discussion:</p>
-            <div className="space-y-2">
-              <Slider
-                min={1}
-                max={10}
-                step={1}
-                value={[additionalMinutes]}
-                onValueChange={(value) => setAdditionalMinutes(value[0])}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>1 min</span>
-                <span className="font-bold text-lg text-[#005596]">{additionalMinutes} minutes</span>
-                <span>10 min</span>
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {showAddTimeSlider ? 'Add More Time' : "Time's Up! Vote on Next Action"}
+            </DialogTitle>
+          </DialogHeader>
+          {showAddTimeSlider ? (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">Select additional time to continue the discussion:</p>
+              <div className="space-y-2">
+                <Slider
+                  min={1}
+                  max={10}
+                  step={1}
+                  value={[additionalMinutes]}
+                  onValueChange={(value) => setAdditionalMinutes(value[0])}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1 min</span>
+                  <span className="font-bold text-lg text-[#005596]">{additionalMinutes} minutes</span>
+                  <span>10 min</span>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowAddTimeSlider(false);
+                    setShowVotingModal(false);
+                    setUserVote(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAddTimeConfirm}
+                  className="bg-[#005596] hover:bg-[#004478] text-white"
+                >
+                  Add Time &amp; Continue
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">Should we finish this topic or continue the discussion?</p>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={() => handleVoteSubmit('finish')}
+                  disabled={userVote !== null}
+                  variant={userVote === 'finish' ? 'default' : 'outline'}
+                  className={`w-full font-semibold ${
+                    userVote === 'finish'
+                      ? 'bg-green-600 hover:bg-green-600 text-white'
+                      : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-600 hover:text-white hover:border-green-600'
+                  }`}
+                  size="lg"
+                >
+                  {userVote === 'finish' && <Check className="h-5 w-5" />}
+                  {userVote === 'finish' ? 'Voted to ' : ''}Finish Topic
+                </Button>
+                <Button
+                  onClick={() => handleVoteSubmit('continue')}
+                  disabled={userVote !== null}
+                  variant={userVote === 'continue' ? 'default' : 'outline'}
+                  className={`w-full font-semibold ${
+                    userVote === 'continue'
+                      ? 'bg-blue-600 hover:bg-blue-600 text-white'
+                      : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600'
+                  }`}
+                  size="lg"
+                >
+                  {userVote === 'continue' && <Check className="h-5 w-5" />}
+                  {userVote === 'continue' ? 'Voted to ' : ''}Continue Discussion
+                </Button>
               </div>
             </div>
-            <div className="flex gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowAddTimeSlider(false);
-                  setShowVotingModal(false);
-                  setUserVote(null);
-                }}
-                className="flex-1"
-                size="lg"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAddTimeConfirm}
-                className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
-                size="lg"
-              >
-                Add Time & Continue
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <p className="mb-6">Should we finish this topic or continue the discussion?</p>
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => handleVoteSubmit('finish')}
-                disabled={userVote !== null}
-                variant={userVote === 'finish' ? 'default' : 'outline'}
-                className={`w-full font-semibold ${
-                  userVote === 'finish'
-                    ? 'bg-green-600 hover:bg-green-600 text-white'
-                    : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-600 hover:text-white hover:border-green-600'
-                }`}
-                size="lg"
-              >
-                {userVote === 'finish' && <Check className="h-5 w-5" />}
-                {userVote === 'finish' ? 'Voted to ' : ''}Finish Topic
-              </Button>
-              <Button
-                onClick={() => handleVoteSubmit('continue')}
-                disabled={userVote !== null}
-                variant={userVote === 'continue' ? 'default' : 'outline'}
-                className={`w-full font-semibold ${
-                  userVote === 'continue'
-                    ? 'bg-blue-600 hover:bg-blue-600 text-white'
-                    : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600'
-                }`}
-                size="lg"
-              >
-                {userVote === 'continue' && <Check className="h-5 w-5" />}
-                {userVote === 'continue' ? 'Voted to ' : ''}Continue Discussion
-              </Button>
-            </div>
-          </>
-        )}
-      </Modal>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Participants Modal */}
-      <Modal
-        isOpen={showDeleteParticipantsModal}
-        onClose={() => setShowDeleteParticipantsModal(false)}
-        title="Delete Participants?"
-      >
-        <p className="mb-6 text-muted-foreground">
-          Are you sure you want to delete {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''}? This action cannot be undone.
-        </p>
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowDeleteParticipantsModal(false)}
-            className="flex-1"
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleDeleteParticipants}
-            className="flex-1"
-          >
-            Delete
-          </Button>
-        </div>
-      </Modal>
+      <AlertDialog open={showDeleteParticipantsModal} onOpenChange={setShowDeleteParticipantsModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Participants?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteParticipants}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

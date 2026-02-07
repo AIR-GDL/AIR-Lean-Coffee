@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { User } from '@/types';
 import { LoginForm } from '@/components/login-form';
 import Board from '@/components/Board';
@@ -9,6 +9,7 @@ import { AppSidebarLeft } from '@/components/app-sidebar-left';
 import { AppSidebarRight } from '@/components/app-sidebar-right';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useUsers } from '@/hooks/useUsers';
+import { usePresenceChannel } from '@/hooks/usePusher';
 import BugReportModal from '@/components/BugReportModal';
 import ChangelogModal from '@/components/ChangelogModal';
 
@@ -42,6 +43,12 @@ export default function Home() {
   });
   
   const { users, mutate: mutateUsers } = useUsers();
+
+  const presenceInfo = useMemo(() => {
+    if (!user) return null;
+    return { email: user.email, name: user.name };
+  }, [user]);
+  const { onlineUsers } = usePresenceChannel(presenceInfo);
 
   useEffect(() => {
     const loadUserFromSession = () => {
@@ -145,6 +152,7 @@ export default function Home() {
           onToggleSelectMode={() => setIsSelectMode(!isSelectMode)}
           onToggleParticipantSelection={handleToggleParticipantSelection}
           onDeleteParticipants={handleDeleteParticipants}
+          onlineUsers={onlineUsers}
         />
       </SidebarProvider>
 

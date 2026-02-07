@@ -4,6 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   votesRemaining: number;
+  isAdmin: boolean;
   createdAt: Date;
 }
 
@@ -22,6 +23,10 @@ const UserSchema = new Schema<IUser>({
   votesRemaining: {
     type: Number,
     default: 3,
+  },
+  isAdmin: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

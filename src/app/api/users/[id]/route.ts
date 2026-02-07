@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
+import pusherServer, { CHANNELS, EVENTS } from '@/lib/pusher-server';
 
 export async function DELETE(
   request: NextRequest,
@@ -27,6 +28,10 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.USER_DELETED, {
+      userId: id,
+    });
 
     return NextResponse.json(
       { message: 'User deleted successfully' },

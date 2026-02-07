@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ClockIcon from './icons/ClockIcon';
+import { Clock } from 'lucide-react';
 
 interface TimerProps {
   remainingSeconds: number;
@@ -48,7 +48,7 @@ export default function Timer({ remainingSeconds, onTimeUp }: TimerProps) {
         ? 'bg-yellow-100 border-4 border-yellow-500' 
         : 'bg-blue-100 border-4 border-blue-500'
     }`}>
-      <ClockIcon size={32} className={iconColor} />
+      <Clock className={`h-8 w-8 ${iconColor}`} />
       <div className="text-6xl font-bold tabular-nums">
         <span className={isCritical ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-blue-600'}>
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}

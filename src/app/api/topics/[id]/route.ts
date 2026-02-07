@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Topic from '@/models/Topic';
 import User from '@/models/User';
+import pusherServer, { CHANNELS, EVENTS } from '@/lib/pusher-server';
 
 export async function PUT(
   request: NextRequest,
@@ -75,6 +76,13 @@ export async function PUT(
         await user.save();
       }
 
+      await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_UPDATED, {
+        topic,
+      });
+      await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.USER_UPDATED, {
+        user,
+      });
+
       return NextResponse.json({ topic, user }, { status: 200 });
     }
 
@@ -132,6 +140,23 @@ export async function PUT(
       
       await topic.save();
 
+      // Trigger appropriate Pusher events based on status change
+      if (status === 'discussing' && discussionStartTime) {
+        await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.DISCUSSION_STARTED, {
+          topicId: id,
+          startTime: discussionStartTime,
+          durationMinutes: discussionDurationMinutes,
+        });
+      } else if (status === 'discussed') {
+        await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.DISCUSSION_FINISHED, {
+          topicId: id,
+        });
+      }
+
+      await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_UPDATED, {
+        topic,
+      });
+
       return NextResponse.json(topic, { status: 200 });
     }
 
@@ -148,6 +173,10 @@ export async function PUT(
         { status: 404 }
       );
     }
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_UPDATED, {
+      topic,
+    });
 
     return NextResponse.json(topic, { status: 200 });
   } catch (error) {
@@ -176,6 +205,10 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_DELETED, {
+      topicId: id,
+    });
 
     return NextResponse.json(
       { message: 'Topic deleted successfully', topic },
