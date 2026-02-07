@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import {
   Coffee,
   History,
@@ -26,17 +25,22 @@ import {
   SidebarSeparator,
 } from '@/components/ui/sidebar';
 
+type ViewType = 'board' | 'history' | 'bugs';
+
 interface AppSidebarLeftProps extends React.ComponentProps<typeof Sidebar> {
   onReportBug?: () => void;
   onViewChangelog?: () => void;
+  currentView?: ViewType;
+  onNavigate?: (view: ViewType) => void;
 }
 
 export function AppSidebarLeft({
   onReportBug,
   onViewChangelog,
+  currentView = 'board',
+  onNavigate,
   ...props
 }: AppSidebarLeftProps) {
-  const router = useRouter();
 
   return (
     <Sidebar className="border-r-0 overflow-x-hidden" {...props}>
@@ -62,7 +66,7 @@ export function AppSidebarLeft({
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton isActive tooltip="Main Board">
+                <SidebarMenuButton isActive={currentView === 'board'} tooltip="Main Board" onClick={() => onNavigate?.('board')}>
                   <Coffee className="text-[#005596]" />
                   <span>Main Board</span>
                 </SidebarMenuButton>
@@ -97,7 +101,8 @@ export function AppSidebarLeft({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Discussion History"
-                  onClick={() => router.push('/history')}
+                  isActive={currentView === 'history'}
+                  onClick={() => onNavigate?.('history')}
                 >
                   <History />
                   <span>Discussion History</span>
@@ -106,7 +111,8 @@ export function AppSidebarLeft({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   tooltip="Bug Reports"
-                  onClick={() => router.push('/bugs')}
+                  isActive={currentView === 'bugs'}
+                  onClick={() => onNavigate?.('bugs')}
                 >
                   <Bug />
                   <span>Bug Reports</span>

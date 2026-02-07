@@ -12,7 +12,7 @@ import TopicCard from './TopicCard';
 import Timer from './Timer';
 import confetti from 'canvas-confetti';
 import { useRouter } from 'next/navigation';
-import { Square, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useGlobalLoader } from '@/context/LoaderContext';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
@@ -803,12 +803,13 @@ export default function Board({
             <Timer
               remainingSeconds={timerSettings.remainingSeconds}
               onTimeUp={handleTimerComplete}
+              onFinishEarly={handleFinishEarly}
             />
             {/* Active Topic Display */}
             {timerSettings.currentTopicId && (() => {
               const currentTopic = topics.find(t => t._id === timerSettings.currentTopicId);
               return currentTopic ? (
-                <div className="bg-card rounded-xl shadow-lg p-6 border-l-4" style={{ borderLeftColor: '#005596' }}>
+                <div className="bg-card rounded-xl shadow-sm p-6 border">
                   <div className="flex items-start gap-4 min-w-0">
                     <div className="flex-1 min-w-0">
                       <h2 className="text-2xl font-bold text-foreground mb-3 truncate break-words">{currentTopic.title}</h2>
@@ -821,17 +822,6 @@ export default function Board({
                 </div>
               ) : null;
             })()}
-            <div className="flex justify-center">
-              <Button
-                variant="outline"
-                onClick={handleFinishEarly}
-                className="border-2 border-[#005596] text-[#005596] hover:bg-[#005596]/10 font-semibold shadow-md"
-                size="lg"
-              >
-                <Square className="h-5 w-5" />
-                Finish Early
-              </Button>
-            </div>
           </div>
         </div>
       )}

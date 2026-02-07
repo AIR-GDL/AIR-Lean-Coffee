@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User } from '@/types';
 import { LoginForm } from '@/components/login-form';
 import Board from '@/components/Board';
+import HistoryView from '@/components/HistoryView';
+import BugsView from '@/components/BugsView';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebarLeft } from '@/components/app-sidebar-left';
 import { AppSidebarRight } from '@/components/app-sidebar-right';
@@ -14,6 +16,8 @@ import { EVENTS } from '@/lib/pusher-client';
 import { updateUserRole } from '@/lib/api';
 import BugReportModal from '@/components/BugReportModal';
 import ChangelogModal from '@/components/ChangelogModal';
+
+type ViewType = 'board' | 'history' | 'bugs';
 
 interface TimerSettings {
   durationMinutes: number;
@@ -33,6 +37,8 @@ export default function Home() {
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
+  const [currentView, setCurrentView] = useState<ViewType>('board');
+  const [bugFilters, setBugFilters] = useState({ severity: [] as string[], status: [] as string[], searchQuery: '' });
   
   const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
     durationMinutes: 5,
@@ -168,21 +174,27 @@ export default function Home() {
         <AppSidebarLeft
           onReportBug={() => setShowBugReportModal(true)}
           onViewChangelog={() => setShowChangelogModal(true)}
+          currentView={currentView}
+          onNavigate={setCurrentView}
         />
         <SidebarInset className="flex flex-col h-svh overflow-hidden">
-          <Board
-            user={user}
-            onLogout={handleLogout}
-            timerSettings={timerSettings}
-            setTimerSettings={setTimerSettings}
-            setUser={setUser}
-            selectedParticipants={selectedParticipants}
-            setSelectedParticipants={setSelectedParticipants}
-            isSelectMode={isSelectMode}
-            setIsSelectMode={setIsSelectMode}
-            showDeleteParticipantsModal={showDeleteParticipantsModal}
-            setShowDeleteParticipantsModal={setShowDeleteParticipantsModal}
-          />
+          {currentView === 'board' && (
+            <Board
+              user={user}
+              onLogout={handleLogout}
+              timerSettings={timerSettings}
+              setTimerSettings={setTimerSettings}
+              setUser={setUser}
+              selectedParticipants={selectedParticipants}
+              setSelectedParticipants={setSelectedParticipants}
+              isSelectMode={isSelectMode}
+              setIsSelectMode={setIsSelectMode}
+              showDeleteParticipantsModal={showDeleteParticipantsModal}
+              setShowDeleteParticipantsModal={setShowDeleteParticipantsModal}
+            />
+          )}
+          {currentView === 'history' && <HistoryView />}
+          {currentView === 'bugs' && <BugsView filters={bugFilters} />}
         </SidebarInset>
         <AppSidebarRight
           user={user}
@@ -197,6 +209,9 @@ export default function Home() {
           onDeleteParticipants={handleDeleteParticipants}
           onlineUsers={onlineUsers}
           onRoleChange={handleRoleChange}
+          currentView={currentView}
+          bugFilters={bugFilters}
+          onBugFiltersChange={setBugFilters}
         />
       </SidebarProvider>
 
