@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -101,6 +102,11 @@ export default function Board({
   const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
   const [showAddTimeSlider, setShowAddTimeSlider] = useState(false);
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
+  const [showAdminTimerChoice, setShowAdminTimerChoice] = useState(false);
+  const [voteResults, setVoteResults] = useState<{ finish: string[]; continue: string[] }>({ finish: [], continue: [] });
+  const [isVotingActive, setIsVotingActive] = useState(false);
+
+  const isAdmin = user.roles?.includes('admin');
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -162,8 +168,11 @@ export default function Board({
         pausedRemainingSeconds: null,
       });
       setShowVotingModal(false);
+      setShowAdminTimerChoice(false);
+      setIsVotingActive(false);
       setUserVote(null);
       setShowAddTimeSlider(false);
+      setVoteResults({ finish: [], continue: [] });
       mutate();
       mutateUsers();
     },
@@ -179,11 +188,14 @@ export default function Board({
         currentTopicId: data.topicId,
       });
       setShowVotingModal(false);
+      setShowAdminTimerChoice(false);
+      setIsVotingActive(false);
       setShowAddTimeSlider(false);
       setUserVote(null);
+      setVoteResults({ finish: [], continue: [] });
     },
     onVotingStarted: (data) => {
-      // Show voting modal for all users when timer expires or admin finishes early
+      // When voting is started (by admin), show voting modal for all users
       if (data.reason === 'timer-expired') {
         setTimerSettings({
           ...timerSettings,
@@ -192,9 +204,28 @@ export default function Board({
           pausedRemainingSeconds: 0,
         });
       }
+      setVoteResults({ finish: [], continue: [] });
+      setIsVotingActive(true);
+      setShowAdminTimerChoice(false);
       setShowVotingModal(true);
       setUserVote(null);
       setShowAddTimeSlider(false);
+    },
+    onVoteCast: (data) => {
+      // Update live vote counts
+      setVoteResults((prev) => {
+        const newResults = { ...prev };
+        // Remove from both lists first (in case of re-vote)
+        newResults.finish = newResults.finish.filter((e) => e !== data.voterEmail);
+        newResults.continue = newResults.continue.filter((e) => e !== data.voterEmail);
+        // Add to the voted list
+        if (data.vote === 'finish') {
+          newResults.finish = [...newResults.finish, data.voterEmail];
+        } else {
+          newResults.continue = [...newResults.continue, data.voterEmail];
+        }
+        return newResults;
+      });
     },
     onVotingResolved: (data) => {
       if (data.result === 'finish') {
@@ -209,8 +240,11 @@ export default function Board({
           pausedRemainingSeconds: null,
         });
         setShowVotingModal(false);
+        setShowAdminTimerChoice(false);
+        setIsVotingActive(false);
         setUserVote(null);
         setShowAddTimeSlider(false);
+        setVoteResults({ finish: [], continue: [] });
         mutate();
         mutateUsers();
         // Confetti for everyone
@@ -257,8 +291,11 @@ export default function Board({
         return;
       }
       
-      if (updatedUser.votesRemaining !== user.votesRemaining) {
+      const rolesChanged = JSON.stringify(updatedUser.roles) !== JSON.stringify(user.roles);
+      const votesChanged = updatedUser.votesRemaining !== user.votesRemaining;
+      if (rolesChanged || votesChanged) {
         setUser(updatedUser);
+        setLocalUser(updatedUser);
         // Also update sessionStorage
         sessionStorage.setItem('lean-coffee-user', JSON.stringify(updatedUser));
       }
@@ -586,7 +623,48 @@ export default function Board({
       isPaused: true,
       pausedRemainingSeconds: 0,
     });
-    // Broadcast voting-started to all clients
+
+    if (isAdmin) {
+      // Admin sees choice: finish topic directly or start a voting round
+      setShowAdminTimerChoice(true);
+    } else {
+      // Non-admins see waiting message (admin will decide)
+      setShowVotingModal(true);
+      setIsVotingActive(false);
+      setUserVote(null);
+    }
+  };
+
+  const handleAdminFinishTopic = async () => {
+    const currentTopicId = timerSettings.currentTopicId;
+    if (currentTopicId && timerSettings.startTime) {
+      try {
+        const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+        const currentTopic = topics.find(t => t._id === currentTopicId);
+        const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+
+        await updateTopic(currentTopicId, {
+          status: 'discussed',
+          totalTimeDiscussed: totalTime,
+        });
+
+        await broadcastEvent(EVENTS.VOTING_RESOLVED, {
+          topicId: currentTopicId,
+          result: 'finish',
+          resolvedBy: user.email,
+        });
+      } catch (error) {
+        console.error('Failed to finish topic:', error);
+      } finally {
+        hideLoader();
+      }
+    }
+    setShowAdminTimerChoice(false);
+  };
+
+  const handleAdminStartVoting = () => {
+    setShowAdminTimerChoice(false);
+    // Broadcast voting-started to all clients (including self)
     broadcastEvent(EVENTS.VOTING_STARTED, {
       topicId: timerSettings.currentTopicId,
       triggeredBy: user.email,
@@ -596,22 +674,29 @@ export default function Board({
 
   const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
     setUserVote(vote);
-    
-    if (vote === 'finish') {
-      // Move topic to discussed
+
+    // Broadcast this user's vote to all clients
+    broadcastEvent(EVENTS.VOTE_CAST, {
+      topicId: timerSettings.currentTopicId,
+      voterEmail: user.email,
+      vote,
+    });
+  };
+
+  const handleAdminResolveVote = async (resolution: 'finish' | 'continue') => {
+    if (resolution === 'finish') {
       const currentTopicId = timerSettings.currentTopicId;
       if (currentTopicId && timerSettings.startTime) {
         try {
           const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
           const currentTopic = topics.find(t => t._id === currentTopicId);
           const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
-          
+
           await updateTopic(currentTopicId, {
             status: 'discussed',
             totalTimeDiscussed: totalTime,
           });
-          // discussion-finished event is triggered by the API route
-          // voting-resolved broadcast will sync all clients
+
           await broadcastEvent(EVENTS.VOTING_RESOLVED, {
             topicId: currentTopicId,
             result: 'finish',
@@ -624,27 +709,8 @@ export default function Board({
         }
       }
     } else {
-      // Continue discussion
-      if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
-        if (timerSettings.pausedRemainingSeconds === 0) {
-          // Timer expired - show add time slider
-          setShowAddTimeSlider(true);
-          return;
-        } else {
-          // Resume from paused time
-          const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
-          setTimerSettings({
-            ...timerSettings,
-            isRunning: true,
-            isPaused: false,
-            startTime: newStartTime,
-            remainingSeconds: timerSettings.pausedRemainingSeconds,
-            pausedRemainingSeconds: null,
-          });
-          setShowVotingModal(false);
-          setUserVote(null);
-        }
-      }
+      // Continue - show add time slider for admin
+      setShowAddTimeSlider(true);
     }
   };
 
@@ -663,7 +729,10 @@ export default function Board({
     });
     setShowAddTimeSlider(false);
     setShowVotingModal(false);
+    setShowAdminTimerChoice(false);
+    setIsVotingActive(false);
     setUserVote(null);
+    setVoteResults({ finish: [], continue: [] });
 
     // Broadcast time-added to all clients
     broadcastEvent(EVENTS.TIME_ADDED, {
@@ -879,30 +948,13 @@ export default function Board({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Voting Modal */}
-      <Dialog open={showVotingModal} onOpenChange={(open) => {
-        if (!open) {
-          if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null && timerSettings.pausedRemainingSeconds > 0) {
-            const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
-            setTimerSettings({
-              ...timerSettings,
-              isRunning: true,
-              isPaused: false,
-              startTime: newStartTime,
-              remainingSeconds: timerSettings.pausedRemainingSeconds,
-              pausedRemainingSeconds: null,
-            });
-          }
-          setShowVotingModal(false);
-          setUserVote(null);
-          setShowAddTimeSlider(false);
-        }
+      {/* Admin Timer Choice Modal - only admin sees this when timer expires */}
+      <Dialog open={showAdminTimerChoice} onOpenChange={(open) => {
+        if (!open) setShowAdminTimerChoice(false);
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {showAddTimeSlider ? 'Add More Time' : "Time's Up! Vote on Next Action"}
-            </DialogTitle>
+            <DialogTitle>{"Time's Up!"}</DialogTitle>
           </DialogHeader>
           {showAddTimeSlider ? (
             <div className="space-y-4 py-2">
@@ -910,7 +962,7 @@ export default function Board({
               <div className="space-y-2">
                 <Slider
                   min={1}
-                  max={10}
+                  max={20}
                   step={1}
                   value={[additionalMinutes]}
                   onValueChange={(value) => setAdditionalMinutes(value[0])}
@@ -919,19 +971,12 @@ export default function Board({
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>1 min</span>
                   <span className="font-bold text-lg text-[#005596]">{additionalMinutes} minutes</span>
-                  <span>10 min</span>
+                  <span>20 min</span>
                 </div>
               </div>
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowAddTimeSlider(false);
-                    setShowVotingModal(false);
-                    setUserVote(null);
-                  }}
-                >
-                  Cancel
+                <Button variant="outline" onClick={() => setShowAddTimeSlider(false)}>
+                  Back
                 </Button>
                 <Button
                   onClick={handleAddTimeConfirm}
@@ -942,6 +987,86 @@ export default function Board({
               </DialogFooter>
             </div>
           ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">What would you like to do?</p>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={handleAdminFinishTopic}
+                  className="w-full font-semibold bg-green-50 text-green-700 border-green-200 hover:bg-green-600 hover:text-white hover:border-green-600"
+                  variant="outline"
+                  size="lg"
+                >
+                  Finish Topic
+                </Button>
+                <Button
+                  onClick={handleAdminStartVoting}
+                  className="w-full font-semibold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600"
+                  variant="outline"
+                  size="lg"
+                >
+                  Start Voting
+                </Button>
+                <Button
+                  onClick={() => {
+                    setAdditionalMinutes(timerSettings.durationMinutes);
+                    setShowAddTimeSlider(true);
+                  }}
+                  className="w-full font-semibold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-600 hover:text-white hover:border-amber-600"
+                  variant="outline"
+                  size="lg"
+                >
+                  Add More Time
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Voting Modal - all users see this when voting is active */}
+      <Dialog open={showVotingModal} onOpenChange={(open) => {
+        if (!open && !isVotingActive) {
+          setShowVotingModal(false);
+          setUserVote(null);
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {showAddTimeSlider ? 'Add More Time' : (isVotingActive ? 'Vote on Next Action' : "Time's Up!")}
+            </DialogTitle>
+          </DialogHeader>
+          {showAddTimeSlider && isAdmin ? (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">Select additional time to continue the discussion:</p>
+              <div className="space-y-2">
+                <Slider
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={[additionalMinutes]}
+                  onValueChange={(value) => setAdditionalMinutes(value[0])}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1 min</span>
+                  <span className="font-bold text-lg text-[#005596]">{additionalMinutes} minutes</span>
+                  <span>20 min</span>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAddTimeSlider(false)}>
+                  Back
+                </Button>
+                <Button
+                  onClick={handleAddTimeConfirm}
+                  className="bg-[#005596] hover:bg-[#004478] text-white"
+                >
+                  Add Time &amp; Continue
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : isVotingActive ? (
             <div className="space-y-4 py-2">
               <p className="text-muted-foreground">Should we finish this topic or continue the discussion?</p>
               <div className="flex flex-col gap-3">
@@ -957,7 +1082,8 @@ export default function Board({
                   size="lg"
                 >
                   {userVote === 'finish' && <Check className="h-5 w-5" />}
-                  {userVote === 'finish' ? 'Voted to ' : ''}Finish Topic
+                  Finish Topic
+                  <Badge variant="secondary" className="ml-2">{voteResults.finish.length}</Badge>
                 </Button>
                 <Button
                   onClick={() => handleVoteSubmit('continue')}
@@ -971,8 +1097,42 @@ export default function Board({
                   size="lg"
                 >
                   {userVote === 'continue' && <Check className="h-5 w-5" />}
-                  {userVote === 'continue' ? 'Voted to ' : ''}Continue Discussion
+                  Continue Discussion
+                  <Badge variant="secondary" className="ml-2">{voteResults.continue.length}</Badge>
                 </Button>
+              </div>
+
+              {/* Admin resolution controls */}
+              {isAdmin && (
+                <div className="border-t pt-4 mt-4 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Admin Decision</p>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleAdminResolveVote('finish')}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                      size="sm"
+                    >
+                      Resolve: Finish
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setAdditionalMinutes(timerSettings.durationMinutes);
+                        handleAdminResolveVote('continue');
+                      }}
+                      className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
+                      size="sm"
+                    >
+                      Resolve: Add Time
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <div className="animate-pulse text-muted-foreground text-center">
+                <p className="text-lg font-medium">Waiting for admin decision...</p>
+                <p className="text-sm mt-1">The admin will decide whether to finish or start a vote.</p>
               </div>
             </div>
           )}

@@ -13,6 +13,8 @@ interface PusherCallbacks {
   onTimeAdded?: (data: { topicId: string; additionalSeconds: number; newStartTime: number }) => void;
   onVotingStarted?: (data: { topicId: string; triggeredBy: string; reason: 'timer-expired' | 'finish-early' }) => void;
   onVotingResolved?: (data: { topicId: string; result: 'finish' | 'continue'; resolvedBy: string }) => void;
+  onVoteCast?: (data: { topicId: string; voterEmail: string; vote: 'finish' | 'continue' }) => void;
+  onDurationChanged?: (data: { durationMinutes: number; changedBy: string }) => void;
   onUserUpdated?: () => void;
   onUserDeleted?: (data: { userId: string }) => void;
 }
@@ -70,6 +72,14 @@ export function usePusher(callbacks: PusherCallbacks) {
 
     channel.bind(EVENTS.VOTING_RESOLVED, (data: { topicId: string; result: 'finish' | 'continue'; resolvedBy: string }) => {
       callbacksRef.current.onVotingResolved?.(data);
+    });
+
+    channel.bind(EVENTS.VOTE_CAST, (data: { topicId: string; voterEmail: string; vote: 'finish' | 'continue' }) => {
+      callbacksRef.current.onVoteCast?.(data);
+    });
+
+    channel.bind(EVENTS.DURATION_CHANGED, (data: { durationMinutes: number; changedBy: string }) => {
+      callbacksRef.current.onDurationChanged?.(data);
     });
 
     channel.bind(EVENTS.USER_UPDATED, () => {

@@ -33,6 +33,8 @@ export async function PATCH(
     }
 
     await user.save();
+    // Strip legacy isAdmin field
+    await User.updateOne({ _id: user._id }, { $unset: { isAdmin: '' } });
 
     await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.USER_UPDATED, {
       user,

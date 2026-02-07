@@ -41,6 +41,10 @@ export const EVENTS = {
   // Voting events
   VOTING_STARTED: 'voting-started',
   VOTING_RESOLVED: 'voting-resolved',
+  VOTE_CAST: 'vote-cast',
+
+  // Settings events
+  DURATION_CHANGED: 'duration-changed',
 
   // User events
   USER_UPDATED: 'user-updated',

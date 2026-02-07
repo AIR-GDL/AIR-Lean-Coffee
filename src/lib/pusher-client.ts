@@ -51,6 +51,8 @@ export const EVENTS = {
   TIME_ADDED: 'time-added',
   VOTING_STARTED: 'voting-started',
   VOTING_RESOLVED: 'voting-resolved',
+  VOTE_CAST: 'vote-cast',
+  DURATION_CHANGED: 'duration-changed',
   USER_UPDATED: 'user-updated',
   USER_DELETED: 'user-deleted',
 } as const;

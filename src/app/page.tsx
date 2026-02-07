@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { User } from '@/types';
 import { LoginForm } from '@/components/login-form';
 import Board from '@/components/Board';
@@ -9,7 +9,8 @@ import { AppSidebarLeft } from '@/components/app-sidebar-left';
 import { AppSidebarRight } from '@/components/app-sidebar-right';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useUsers } from '@/hooks/useUsers';
-import { usePresenceChannel } from '@/hooks/usePusher';
+import { usePresenceChannel, usePusher } from '@/hooks/usePusher';
+import { EVENTS } from '@/lib/pusher-client';
 import { updateUserRole } from '@/lib/api';
 import BugReportModal from '@/components/BugReportModal';
 import ChangelogModal from '@/components/ChangelogModal';
@@ -86,9 +87,43 @@ export default function Home() {
     }
   };
 
-  const handleTimerChange = (minutes: number) => {
-    setTimerSettings({ ...timerSettings, durationMinutes: minutes });
-  };
+  const durationDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const broadcastEvent = useCallback(async (eventName: string, data: Record<string, unknown>) => {
+    try {
+      await fetch('/api/pusher/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventName, data }),
+      });
+    } catch (error) {
+      console.error('Failed to broadcast event:', error);
+    }
+  }, []);
+
+  // Listen for duration changes from other admins
+  usePusher({
+    onDurationChanged: (data) => {
+      if (data.changedBy !== user?.email) {
+        setTimerSettings((prev) => ({ ...prev, durationMinutes: data.durationMinutes }));
+      }
+    },
+  });
+
+  const handleTimerChange = useCallback((minutes: number) => {
+    setTimerSettings((prev) => ({ ...prev, durationMinutes: minutes }));
+
+    // Debounce Pusher broadcast (500ms)
+    if (durationDebounceRef.current) {
+      clearTimeout(durationDebounceRef.current);
+    }
+    durationDebounceRef.current = setTimeout(() => {
+      broadcastEvent(EVENTS.DURATION_CHANGED, {
+        durationMinutes: minutes,
+        changedBy: user?.email || '',
+      });
+    }, 500);
+  }, [user?.email, broadcastEvent, setTimerSettings]);
 
   const handleToggleParticipantSelection = (userId: string) => {
     const newSelected = new Set(selectedParticipants);

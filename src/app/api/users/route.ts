@@ -21,10 +21,21 @@ export async function POST(request: NextRequest) {
 
     if (user) {
       // User exists - check if name needs to be updated
+      let needsSave = false;
       if (user.name !== name) {
         user.name = name;
+        needsSave = true;
+      }
+      // Ensure roles field exists and strip legacy isAdmin
+      if (!user.roles || user.roles.length === 0) {
+        user.roles = ['user'];
+        needsSave = true;
+      }
+      if (needsSave) {
         await user.save();
       }
+      // Strip legacy isAdmin field from document
+      await User.updateOne({ _id: user._id }, { $unset: { isAdmin: '' } });
       return NextResponse.json(user, { status: 200 });
     }
 

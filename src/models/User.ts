@@ -32,6 +32,19 @@ const UserSchema = new Schema<IUser>({
     type: Date,
     default: Date.now,
   },
+}, {
+  toJSON: {
+    transform(_doc, ret: Record<string, unknown>) {
+      delete ret.isAdmin;
+      return ret;
+    },
+  },
+  toObject: {
+    transform(_doc, ret: Record<string, unknown>) {
+      delete ret.isAdmin;
+      return ret;
+    },
+  },
 });
 
 // Prevent model recompilation in development
