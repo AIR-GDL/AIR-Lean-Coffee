@@ -3,44 +3,56 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DndContext, DragEndEvent, DragOverlay, pointerWithin, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { User, TimerSettings, ColumnType } from '@/types';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useTopics } from '@/hooks/useTopics';
 import { useUsers } from '@/hooks/useUsers';
+import { usePusher } from '@/hooks/usePusher';
 import { createTopic, updateTopic, deleteTopic, deleteUser } from '@/lib/api';
 import Column from './Column';
 import TopicCard from './TopicCard';
 import Timer from './Timer';
-import Modal from './Modal';
 import confetti from 'canvas-confetti';
 import { useRouter } from 'next/navigation';
-import ClockIcon from './icons/ClockIcon';
-import LogoutIcon from './icons/LogoutIcon';
-import HistoryIcon from './icons/HistoryIcon';
-import PeopleIcon from './icons/PeopleIcon';
-import StopIcon from './icons/StopIcon';
-import CheckIcon from './icons/CheckIcon';
-import DeleteIcon from './icons/DeleteIcon';
-import MaterialSymbol from './icons/MaterialSymbol';
-import ShieldIcon from './icons/ShieldIcon';
-import ThumbsDownIcon from './icons/ThumbsDownIcon';
-import ThumbsUpIcon from './icons/ThumbsUpIcon';
-import EqualIcon from './icons/EqualIcon';
-import SettingsIcon from './icons/SettingsIcon';
-import FeedbackMenu from './FeedbackMenu';
-import BugReportModal from './BugReportModal';
-import ChangelogModal from './ChangelogModal';
-import AppHeader from './AppHeader';
-import SettingsView from './SettingsView';
+import { Check } from 'lucide-react';
 import { useGlobalLoader } from '@/context/LoaderContext';
-import { usePusherTopics, triggerTopicEvent } from '@/hooks/usePusherTopics';
-import { usePusherUsers, triggerUserEvent } from '@/hooks/usePusherUsers';
-import { usePusherTimer, triggerTimerEvent } from '@/hooks/usePusherTimer';
-import { useIsAdmin } from '@/hooks/useIsAdmin';
-import Footer from './Footer';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Slider } from '@/components/ui/slider';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { EVENTS } from '@/lib/pusher-client';
 
 interface BoardProps {
   user: User;
   onLogout: () => void;
+  timerSettings: TimerSettings;
+  setTimerSettings: (value: TimerSettings | ((val: TimerSettings) => TimerSettings)) => void;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  selectedParticipants: Set<string>;
+  setSelectedParticipants: React.Dispatch<React.SetStateAction<Set<string>>>;
+  isSelectMode: boolean;
+  setIsSelectMode: React.Dispatch<React.SetStateAction<boolean>>;
+  showDeleteParticipantsModal: boolean;
+  setShowDeleteParticipantsModal: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 // Helper function to map DB status to column ID
@@ -63,33 +75,24 @@ const columnIdToStatus = (columnId: ColumnType): 'to-discuss' | 'discussing' | '
   return mapping[columnId] || 'to-discuss';
 };
 
-export default function Board({ user: initialUser, onLogout }: BoardProps) {
+export default function Board({ 
+  user: initialUser, 
+  onLogout, 
+  timerSettings, 
+  setTimerSettings,
+  setUser,
+  selectedParticipants,
+  setSelectedParticipants,
+  isSelectMode,
+  setIsSelectMode,
+  showDeleteParticipantsModal,
+  setShowDeleteParticipantsModal,
+}: BoardProps) {
   const router = useRouter();
   const { topics, isLoading, mutate } = useTopics();
   const { users, mutate: mutateUsers } = useUsers();
   const { showLoader, hideLoader } = useGlobalLoader();
-  
-  // Generate unique room ID based on hostname and timestamp
-  // This ensures different browser tabs/sessions have separate rooms
-  const [roomId] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const path = window.location.pathname || '/';
-      return `room${path.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-    }
-    return 'room-default';
-  });
-  
-  const [user, setUser] = useState<User>(initialUser);
-  const isAdmin = useIsAdmin(user);
-  const [timerSettings, setTimerSettings] = useLocalStorage<TimerSettings>('lean-coffee-timer', {
-    durationMinutes: 5,
-    isRunning: false,
-    startTime: null,
-    remainingSeconds: null,
-    currentTopicId: null,
-    isPaused: false,
-    pausedRemainingSeconds: null,
-  });
+  const [user, setLocalUser] = useState<User>(initialUser);
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showAddTopicModal, setShowAddTopicModal] = useState(false);
@@ -101,14 +104,11 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   const [timerExpired, setTimerExpired] = useState(false);
   const [voteCount, setVoteCount] = useState({ against: 0, neutral: 0, favor: 0 });
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
-  const [showBugReportModal, setShowBugReportModal] = useState(false);
-  const [showChangelogModal, setShowChangelogModal] = useState(false);
-  const [hoveredVote, setHoveredVote] = useState<'against' | 'neutral' | 'favor' | null>(null);
-  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(new Set());
-  const [showDeleteParticipantsModal, setShowDeleteParticipantsModal] = useState(false);
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
-  const [showSettingsView, setShowSettingsView] = useState(false);
+  const [showAdminTimerChoice, setShowAdminTimerChoice] = useState(false);
+  const [voteResults, setVoteResults] = useState<{ finish: string[]; continue: string[] }>({ finish: [], continue: [] });
+  const [isVotingActive, setIsVotingActive] = useState(false);
+
+  const isAdmin = user.roles?.includes('admin');
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
   const [newTopicDescription, setNewTopicDescription] = useState('');
@@ -117,6 +117,152 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   // Track if timer has been restored to avoid infinite loops
   const timerRestoredRef = useRef(false);
   const durationUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Helper to broadcast Pusher events via API
+  const broadcastEvent = useCallback(async (eventName: string, data: Record<string, unknown>) => {
+    try {
+      await fetch('/api/pusher/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventName, data }),
+      });
+    } catch (error) {
+      console.error('Failed to broadcast event:', error);
+    }
+  }, []);
+
+  // Pusher real-time subscriptions
+  usePusher({
+    onTopicCreated: () => mutate(),
+    onTopicUpdated: () => mutate(),
+    onTopicDeleted: () => mutate(),
+    onDurationChanged: (data) => {
+      if (data.changedBy !== user.email) {
+        setTimerSettings((prev: TimerSettings) => ({ ...prev, durationMinutes: data.durationMinutes }));
+      }
+    },
+    onUserUpdated: () => mutateUsers(),
+    onUserDeleted: () => mutateUsers(),
+    onDiscussionStarted: (data) => {
+      // When another user starts a discussion, sync the timer
+      const now = Date.now();
+      const elapsedMs = now - data.startTime;
+      const totalMs = data.durationMinutes * 60 * 1000;
+      const remainingMs = Math.max(0, totalMs - elapsedMs);
+      const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+      if (remainingMs > 0) {
+        setTimerSettings({
+          durationMinutes: data.durationMinutes,
+          isRunning: true,
+          isPaused: false,
+          startTime: data.startTime,
+          remainingSeconds,
+          pausedRemainingSeconds: null,
+          currentTopicId: data.topicId,
+        });
+      }
+      mutate();
+    },
+    onDiscussionFinished: () => {
+      // Reset timer and close voting modal for all users
+      setTimerSettings({
+        ...timerSettings,
+        isRunning: false,
+        startTime: null,
+        remainingSeconds: null,
+        currentTopicId: null,
+        isPaused: false,
+        pausedRemainingSeconds: null,
+      });
+      setShowVotingModal(false);
+      setShowAdminTimerChoice(false);
+      setIsVotingActive(false);
+      setUserVote(null);
+      setShowAddTimeSlider(false);
+      setVoteResults({ finish: [], continue: [] });
+      mutate();
+      mutateUsers();
+    },
+    onTimeAdded: (data) => {
+      // Sync added time across all clients
+      setTimerSettings({
+        ...timerSettings,
+        isRunning: true,
+        isPaused: false,
+        startTime: data.newStartTime,
+        remainingSeconds: data.additionalSeconds,
+        pausedRemainingSeconds: null,
+        currentTopicId: data.topicId,
+      });
+      setShowVotingModal(false);
+      setShowAdminTimerChoice(false);
+      setIsVotingActive(false);
+      setShowAddTimeSlider(false);
+      setUserVote(null);
+      setVoteResults({ finish: [], continue: [] });
+    },
+    onVotingStarted: (data) => {
+      // When voting is started (by admin), show voting modal for all users
+      if (data.reason === 'timer-expired') {
+        setTimerSettings({
+          ...timerSettings,
+          isRunning: false,
+          isPaused: true,
+          pausedRemainingSeconds: 0,
+        });
+      }
+      setVoteResults({ finish: [], continue: [] });
+      setIsVotingActive(true);
+      setShowAdminTimerChoice(false);
+      setShowVotingModal(true);
+      setUserVote(null);
+      setShowAddTimeSlider(false);
+    },
+    onVoteCast: (data) => {
+      // Update live vote counts
+      setVoteResults((prev) => {
+        const newResults = { ...prev };
+        // Remove from both lists first (in case of re-vote)
+        newResults.finish = newResults.finish.filter((e) => e !== data.voterEmail);
+        newResults.continue = newResults.continue.filter((e) => e !== data.voterEmail);
+        // Add to the voted list
+        if (data.vote === 'finish') {
+          newResults.finish = [...newResults.finish, data.voterEmail];
+        } else {
+          newResults.continue = [...newResults.continue, data.voterEmail];
+        }
+        return newResults;
+      });
+    },
+    onVotingResolved: (data) => {
+      if (data.result === 'finish') {
+        // Reset timer and close modal
+        setTimerSettings({
+          ...timerSettings,
+          isRunning: false,
+          startTime: null,
+          remainingSeconds: null,
+          currentTopicId: null,
+          isPaused: false,
+          pausedRemainingSeconds: null,
+        });
+        setShowVotingModal(false);
+        setShowAdminTimerChoice(false);
+        setIsVotingActive(false);
+        setUserVote(null);
+        setShowAddTimeSlider(false);
+        setVoteResults({ finish: [], continue: [] });
+        mutate();
+        mutateUsers();
+        // Confetti for everyone
+        setTimeout(() => {
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        }, 100);
+      }
+      // 'continue' with time added is handled by onTimeAdded
+    },
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -190,10 +336,11 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
         return;
       }
       
-      // Update if votes or roles changed
-      if (updatedUser.votesRemaining !== user.votesRemaining || 
-          JSON.stringify(updatedUser.roles) !== JSON.stringify(user.roles)) {
+      const rolesChanged = JSON.stringify(updatedUser.roles) !== JSON.stringify(user.roles);
+      const votesChanged = updatedUser.votesRemaining !== user.votesRemaining;
+      if (rolesChanged || votesChanged) {
         setUser(updatedUser);
+        setLocalUser(updatedUser);
         // Also update sessionStorage
         sessionStorage.setItem('lean-coffee-user', JSON.stringify(updatedUser));
       }
@@ -203,32 +350,29 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   // Restore timer if a topic is currently being discussed
   useEffect(() => {
-    if (isLoading || topics.length === 0) {
-      timerRestoredRef.current = false;
-      return;
-    }
+    if (isLoading) return;
 
     const discussingTopic = topics.find(t => t.status === 'discussing');
 
-    // Only restore timer once per discussing topic
-    if (timerRestoredRef.current && timerSettings.currentTopicId === discussingTopic?._id) {
-      return;
-    }
-
     if (!discussingTopic || !discussingTopic.discussionStartTime || !discussingTopic.discussionDurationMinutes) {
-      // If there's no discussing topic or missing data, reset timer only once
-      if (!timerRestoredRef.current) {
-        setTimerSettings({
-          durationMinutes: 5,
+      // No discussing topic — reset timer but preserve durationMinutes
+      if (timerSettings.isRunning || timerSettings.currentTopicId) {
+        setTimerSettings((prev: TimerSettings) => ({
+          ...prev,
           isRunning: false,
           startTime: null,
           remainingSeconds: null,
           currentTopicId: null,
           isPaused: false,
           pausedRemainingSeconds: null,
-        });
-        timerRestoredRef.current = true;
+        }));
       }
+      timerRestoredRef.current = false;
+      return;
+    }
+
+    // Already restored for this exact topic — skip
+    if (timerRestoredRef.current && timerSettings.currentTopicId === discussingTopic._id) {
       return;
     }
 
@@ -242,195 +386,51 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
 
     if (remainingMs <= 0) {
-      setTimerSettings({
-        durationMinutes: discussingTopic.discussionDurationMinutes || 0,
+      setTimerSettings((prev: TimerSettings) => ({
+        ...prev,
+        durationMinutes: discussingTopic.discussionDurationMinutes || prev.durationMinutes,
         isRunning: false,
         isPaused: true,
         startTime,
         remainingSeconds: 0,
         pausedRemainingSeconds: 0,
         currentTopicId: discussingTopic._id,
-      });
-      setTimerExpired(true);
-      setShowVotingModal(true);
-      setShowAddTimeSlider(false);
-      setUserVote(null);
+      }));
     } else {
-      setTimerSettings({
-        durationMinutes: discussingTopic.discussionDurationMinutes || 0,
+      setTimerSettings((prev: TimerSettings) => ({
+        ...prev,
+        durationMinutes: discussingTopic.discussionDurationMinutes || prev.durationMinutes,
         isRunning: true,
         isPaused: false,
         startTime: now - elapsedMs,
         remainingSeconds,
         pausedRemainingSeconds: null,
         currentTopicId: discussingTopic._id,
-      });
+      }));
     }
 
     timerRestoredRef.current = true;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, topics]);
 
-  // Subscribe to Pusher timer events for real-time synchronization
-  usePusherTimer({
-    onTimerUpdated: (timerData) => {
-      const now = Date.now();
-      const startTime = timerData.startTime ?? now;
-      const durationMinutes = timerData.durationMinutes ?? 5;
-      const totalMs = durationMinutes * 60 * 1000;
-      const elapsedMs = now - startTime;
-      const remainingMs = Math.max(0, totalMs - elapsedMs);
-      const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
-
-      setTimerSettings({
-        durationMinutes,
-        isRunning: true,
-        startTime,
-        remainingSeconds,
-        currentTopicId: timerData.topicId ?? null,
-        isPaused: false,
-        pausedRemainingSeconds: null,
-      });
-
-      setShowVotingModal(false);
-      setShowAddTimeSlider(false);
-      setUserVote(null);
-      setVoteCount({ against: 0, neutral: 0, favor: 0 });
-      setTimerExpired(false);
-    },
-    onTimerStarted: (timerData) => {
-      const now = Date.now();
-      const startTime = timerData.startTime ?? now;
-      const durationMinutes = timerData.durationMinutes ?? 5;
-      const totalMs = durationMinutes * 60 * 1000;
-      const elapsedMs = now - startTime;
-      const remainingMs = Math.max(0, totalMs - elapsedMs);
-      const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
-
-      setTimerSettings({
-        durationMinutes,
-        isRunning: true,
-        startTime,
-        remainingSeconds,
-        currentTopicId: timerData.topicId ?? null,
-        isPaused: false,
-        pausedRemainingSeconds: null,
-      });
-
-      setShowVotingModal(false);
-      setShowAddTimeSlider(false);
-      setUserVote(null);
-      setVoteCount({ against: 0, neutral: 0, favor: 0 });
-      setTimerExpired(false);
-    },
-    onTimerPaused: (timerData) => {
-      setTimerSettings({
-        durationMinutes: timerData.durationMinutes || 5,
-        isRunning: false,
-        isPaused: true,
-        pausedRemainingSeconds: timerData.remainingSeconds || 0,
-        startTime: null,
-        remainingSeconds: timerData.remainingSeconds || 0,
-        currentTopicId: timerData.topicId,
-      });
-
-      setShowVotingModal(false);
-      setShowAddTimeSlider(false);
-      setUserVote(null);
-      setVoteCount({ against: 0, neutral: 0, favor: 0 });
-      setTimerExpired(false);
-    },
-    onTimerStopped: () => {
-      setTimerSettings({
-        durationMinutes: 5,
-        isRunning: false,
-        startTime: null,
-        remainingSeconds: null,
-        currentTopicId: null,
-        isPaused: false,
-        pausedRemainingSeconds: null,
-      });
-
-      setShowVotingModal(false);
-      setShowAddTimeSlider(false);
-      setUserVote(null);
-      setVoteCount({ against: 0, neutral: 0, favor: 0 });
-      setTimerExpired(false);
-    },
-    onDurationChanged: (durationMinutes) => {
-      setTimerSettings(prev => ({
-        ...prev,
-        durationMinutes,
-      }));
-
-      setShowVotingModal(false);
-      setShowAddTimeSlider(false);
-      setUserVote(null);
-      setVoteCount({ against: 0, neutral: 0, favor: 0 });
-      setTimerExpired(false);
-    },
-  });
-
-  // Subscribe to Pusher user events for online status
-  usePusherUsers({
-    roomId,
-    onUserJoined: ({ user: joinedUser, requestSync }) => {
-      setOnlineUsers(prev => new Set([...prev, joinedUser._id]));
-
-      if (requestSync && user?._id && user._id !== joinedUser._id) {
-        triggerUserEvent('user-online', { user }, roomId);
-      }
-    },
-    onUserOnline: (onlineUser) => {
-      setOnlineUsers(prev => new Set([...prev, onlineUser._id]));
-    },
-    onUserLeft: (userId) => {
-      setOnlineUsers(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(userId);
-        return newSet;
-      });
-    },
-    onUserUpdated: (updatedUser) => {
-      if (updatedUser._id === user?._id) {
-        setUser(updatedUser);
-      }
-    },
-    onVotesUpdated: (userId, votesRemaining) => {
-      if (userId === user?._id) {
-        setUser(prev => ({ ...prev, votesRemaining }));
-      }
-    },
-    onVoteCast: ({ voteCount }) => {
-      setVoteCount(voteCount);
-    },
-  });
-
-  // Mark current user as online on mount
+  // Show admin choice or waiting dialog when timer has expired for a discussing topic
   useEffect(() => {
-    if (user?._id) {
-      setOnlineUsers(prev => new Set([...prev, user._id]));
+    if (!timerSettings.currentTopicId) return;
+    if (!timerSettings.isPaused || timerSettings.pausedRemainingSeconds !== 0) return;
+    // Timer expired and topic still discussing — show the appropriate dialog
+    if (isAdmin) {
+      if (!showAdminTimerChoice && !showVotingModal) {
+        setShowAdminTimerChoice(true);
+      }
+    } else {
+      if (!showVotingModal && !showAdminTimerChoice) {
+        setShowVotingModal(true);
+        setIsVotingActive(false);
+        setUserVote(null);
+      }
     }
-  }, [user?._id]);
-
-  // Sort users: online first (admins then users), then offline (admins then users)
-  const sortedUsers = useMemo(() => {
-    console.log('sortedUsers recalculated, onlineUsers size:', onlineUsers.size, 'users length:', users.length);
-    return [...users].sort((a, b) => {
-      // Online users first
-      const aIsOnline = onlineUsers.has(a._id) ? 1 : 0;
-      const bIsOnline = onlineUsers.has(b._id) ? 1 : 0;
-      if (aIsOnline !== bIsOnline) return bIsOnline - aIsOnline;
-
-      // Then admins within each group (online/offline)
-      const aIsAdmin = a.roles?.includes('admin') ? 1 : 0;
-      const bIsAdmin = b.roles?.includes('admin') ? 1 : 0;
-      if (aIsAdmin !== bIsAdmin) return bIsAdmin - aIsAdmin;
-
-      // Then by name
-      return a.name.localeCompare(b.name);
-    });
-  }, [users, onlineUsers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timerSettings.isPaused, timerSettings.pausedRemainingSeconds, timerSettings.currentTopicId, isAdmin]);
 
   const getTopicsByColumn = (columnId: ColumnType) => {
     const dbStatus = columnIdToStatus(columnId);
@@ -538,6 +538,9 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     const { active, over } = event;
     setActiveId(null);
 
+    // Only admins can drag cards between columns
+    if (!user.roles?.includes('admin')) return;
+
     // If no drop target detected, return early
     if (!over) return;
 
@@ -581,8 +584,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
             pausedRemainingSeconds: remainingSeconds,
             remainingSeconds: remainingSeconds,
           });
-          // Show voting modal
-          setShowVotingModal(true);
+          // Broadcast voting-started to all clients
+          broadcastEvent(EVENTS.VOTING_STARTED, {
+            topicId,
+            triggeredBy: user.email,
+            reason: 'finish-early',
+          });
         } else {
           // Allow moving from discussing to discussed (manual move)
           handleMoveToDiscussed(topicId);
@@ -709,11 +716,55 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
     setTimerSettings((prev) => ({
       ...prev,
       pausedRemainingSeconds: 0,
-    }));
-    setTimerExpired(true);
-    setShowVotingModal(true);
-    setUserVote(null);
-  }, []);
+    });
+
+    if (isAdmin) {
+      // Admin sees choice: finish topic directly or start a voting round
+      setShowAdminTimerChoice(true);
+    } else {
+      // Non-admins see waiting message (admin will decide)
+      setShowVotingModal(true);
+      setIsVotingActive(false);
+      setUserVote(null);
+    }
+  };
+
+  const handleAdminFinishTopic = async () => {
+    const currentTopicId = timerSettings.currentTopicId;
+    if (currentTopicId && timerSettings.startTime) {
+      try {
+        const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+        const currentTopic = topics.find(t => t._id === currentTopicId);
+        const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+
+        await updateTopic(currentTopicId, {
+          status: 'discussed',
+          totalTimeDiscussed: totalTime,
+        });
+
+        await broadcastEvent(EVENTS.VOTING_RESOLVED, {
+          topicId: currentTopicId,
+          result: 'finish',
+          resolvedBy: user.email,
+        });
+      } catch (error) {
+        console.error('Failed to finish topic:', error);
+      } finally {
+        hideLoader();
+      }
+    }
+    setShowAdminTimerChoice(false);
+  };
+
+  const handleAdminStartVoting = () => {
+    setShowAdminTimerChoice(false);
+    // Broadcast voting-started to all clients (including self)
+    broadcastEvent(EVENTS.VOTING_STARTED, {
+      topicId: timerSettings.currentTopicId,
+      triggeredBy: user.email,
+      reason: 'timer-expired',
+    });
+  };
 
   // Sync online users when voting modal opens
   useEffect(() => {
@@ -725,206 +776,72 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
 
   const handleVoteSubmit = async (vote: 'finish' | 'continue' | 'against' | 'neutral' | 'favor') => {
     setUserVote(vote);
-    
-    // Count votes when timer expired
-    if (timerExpired && (vote === 'against' || vote === 'neutral' || vote === 'favor')) {
-      const newVoteCount = {
-        ...voteCount,
-        [vote]: voteCount[vote as keyof typeof voteCount] + 1,
-      };
-      setVoteCount(newVoteCount);
-      
-      // Broadcast vote to other sessions
-      if (user?._id) {
-        triggerUserEvent('vote-cast', {
-          userId: user._id,
-          vote,
-          voteCount: newVoteCount,
-        }, roomId);
-      }
-    }
-    
-    // In a real app, this would collect votes from all users
-    // For now, we'll simulate immediate action
-    setTimeout(async () => {
-      // Handle timer expired votes (against, neutral, favor)
-      if (timerExpired && (vote === 'against' || vote === 'neutral' || vote === 'favor')) {
-        if (vote === 'against') {
-          // Move topic to discussed (don't continue)
-          const currentTopicId = timerSettings.currentTopicId;
-          if (currentTopicId && timerSettings.startTime) {
-            try {
-              const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
-              const currentTopic = topics.find(t => t._id === currentTopicId);
-              const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
-              
-              await updateTopic(currentTopicId, {
-                status: 'discussed',
-                totalTimeDiscussed: totalTime,
-              });
 
-              await triggerTopicEvent('topic-status-changed', {
-                topicId: currentTopicId,
-                status: 'discussed',
-              });
-              await triggerTimerEvent('timer-stopped', {
-                topicId: currentTopicId,
-              });
-
-              await mutate();
-              await mutateUsers();
-            } catch (error) {
-              console.error('Failed to finish topic:', error);
-            }
-          }
-
-          setTimerSettings({
-            ...timerSettings,
-            isRunning: false,
-            startTime: null,
-            remainingSeconds: null,
-            currentTopicId: null,
-            isPaused: false,
-            pausedRemainingSeconds: null,
-          });
-        } else if (vote === 'neutral') {
-          // Neutral - just close modal and show add time slider
-          setShowAddTimeSlider(true);
-          hideLoader();
-          return;
-        } else if (vote === 'favor') {
-          // Favor - show add time slider
-          setShowAddTimeSlider(true);
-          hideLoader();
-          return;
-        }
-      } else if (vote === 'finish') {
-        // Move topic to discussed
-        const currentTopicId = timerSettings.currentTopicId;
-        if (currentTopicId && timerSettings.startTime) {
-          try {
-            // Calculate elapsed time in seconds
-            const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
-            
-            // Get current topic to add to existing time
-            const currentTopic = topics.find(t => t._id === currentTopicId);
-            const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
-            
-            const updatedTopic = await updateTopic(currentTopicId, {
-              status: 'discussed',
-              totalTimeDiscussed: totalTime,
-            });
-
-            // Trigger Pusher events
-            await triggerTopicEvent('topic-status-changed', {
-              topicId: currentTopicId,
-              status: 'discussed',
-            });
-            await triggerTimerEvent('timer-stopped', {
-              topicId: currentTopicId,
-            });
-
-            await mutate(); // Refresh topics
-            await mutateUsers(); // Refresh users to update vote counts
-          } catch (error) {
-            console.error('Failed to finish topic:', error);
-          }
-        }
-
-        // Reset timer
-        setTimerSettings({
-          ...timerSettings,
-          isRunning: false,
-          startTime: null,
-          remainingSeconds: null,
-          currentTopicId: null,
-          isPaused: false,
-          pausedRemainingSeconds: null,
-        });
-      } else {
-        // Continue discussion
-        if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
-          if (timerSettings.pausedRemainingSeconds === 0) {
-            // Timer expired - don't close modal, show add time slider instead
-            setShowAddTimeSlider(true);
-            hideLoader();
-            return; // Exit early, don't close modal
-          } else {
-            // User pressed "Finish Early" but wants to continue
-            // Just resume the timer without recalculating
-            setTimerSettings({
-              ...timerSettings,
-              isRunning: true,
-              isPaused: false,
-              pausedRemainingSeconds: null,
-            });
-
-            // Trigger Pusher event for timer resumed
-            if (timerSettings.currentTopicId && timerSettings.startTime) {
-              await triggerTimerEvent('timer-started', {
-                topicId: timerSettings.currentTopicId,
-                startTime: timerSettings.startTime,
-                durationMinutes: timerSettings.durationMinutes,
-              });
-            }
-          }
-        }
-      }
-
-      // Close modal first
-      setShowVotingModal(false);
-      setUserVote(null);
-      setShowAddTimeSlider(false);
-      setTimerExpired(false);
-
-      // Trigger confetti AFTER modal closes (only for finish action)
-      if (vote === 'finish') {
-        setTimeout(() => {
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.6 },
-          });
-        }, 100);
-      }
-    }, 500);
+    // Broadcast this user's vote to all clients
+    broadcastEvent(EVENTS.VOTE_CAST, {
+      topicId: timerSettings.currentTopicId,
+      voterEmail: user.email,
+      vote,
+    });
   };
 
-  const handleAddTimeConfirm = async () => {
-    const currentTopicId = timerSettings.currentTopicId;
-    const newStartTime = Date.now();
-    const newDurationMinutes = additionalMinutes;
-    
-    if (currentTopicId) {
-      try {
-        await updateTopic(currentTopicId, {
-          discussionStartTime: new Date(newStartTime).toISOString(),
-          discussionDurationMinutes: newDurationMinutes,
-        });
-        
-        await triggerTimerEvent('timer-updated', {
-          topicId: currentTopicId,
-          startTime: newStartTime,
-          durationMinutes: newDurationMinutes,
-        });
-      } catch (error) {
-        console.error('Failed to add time:', error);
+  const handleAdminResolveVote = async (resolution: 'finish' | 'continue') => {
+    if (resolution === 'finish') {
+      const currentTopicId = timerSettings.currentTopicId;
+      if (currentTopicId && timerSettings.startTime) {
+        try {
+          const elapsedSeconds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+          const currentTopic = topics.find(t => t._id === currentTopicId);
+          const totalTime = (currentTopic?.totalTimeDiscussed || 0) + elapsedSeconds;
+
+          await updateTopic(currentTopicId, {
+            status: 'discussed',
+            totalTimeDiscussed: totalTime,
+          });
+
+          await broadcastEvent(EVENTS.VOTING_RESOLVED, {
+            topicId: currentTopicId,
+            result: 'finish',
+            resolvedBy: user.email,
+          });
+        } catch (error) {
+          console.error('Failed to finish topic:', error);
+        } finally {
+          hideLoader();
+        }
       }
+    } else {
+      // Continue - show add time slider for admin
+      setShowAddTimeSlider(true);
     }
+  };
+
+  const handleAddTimeConfirm = () => {
+    const newStartTime = Date.now();
+    const additionalSeconds = additionalMinutes * 60;
     
+    // Update local timer
     setTimerSettings({
       ...timerSettings,
       isRunning: true,
       isPaused: false,
       startTime: newStartTime,
-      remainingSeconds: newDurationMinutes * 60,
+      remainingSeconds: additionalSeconds,
       pausedRemainingSeconds: null,
     });
     setShowAddTimeSlider(false);
     setShowVotingModal(false);
+    setShowAdminTimerChoice(false);
+    setIsVotingActive(false);
     setUserVote(null);
-    setVoteCount({ against: 0, neutral: 0, favor: 0 });
-    setTimerExpired(false);
+    setVoteResults({ finish: [], continue: [] });
+
+    // Broadcast time-added to all clients
+    broadcastEvent(EVENTS.TIME_ADDED, {
+      topicId: timerSettings.currentTopicId,
+      additionalSeconds,
+      newStartTime,
+    });
   };
 
   const handleFinishEarly = () => {
@@ -935,8 +852,12 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
       isPaused: true,
       pausedRemainingSeconds: timerSettings.remainingSeconds,
     });
-    setShowVotingModal(true);
-    setUserVote(null);
+    // Broadcast voting-started to all clients
+    broadcastEvent(EVENTS.VOTING_STARTED, {
+      topicId: timerSettings.currentTopicId,
+      triggeredBy: user.email,
+      reason: 'finish-early',
+    });
   };
 
   const handleDurationChange = useCallback((newDuration: number) => {
@@ -1062,72 +983,53 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-sky-50">
-      <AppHeader user={user} onLogout={onLogout}>
-        <FeedbackMenu
-          onReportBug={() => setShowBugReportModal(true)}
-          onViewChangelog={() => setShowChangelogModal(true)}
-        />
-        {isAdmin && (
-          <button
-            onClick={() => setShowSettingsView(true)}
-            className="p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition"
-            title="Settings"
-          >
-            <SettingsIcon size={24} color="currentColor" />
-          </button>
-        )}
-      </AppHeader>
+    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+      {/* Header with Sidebar Trigger */}
+      <header className="flex-shrink-0 bg-background sticky top-0 flex h-14 items-center gap-2 border-b px-4">
+        <SidebarTrigger className="-ml-1" />
+        <Separator orientation="vertical" className="mr-2 h-4" />
+        <h1 className="text-lg font-semibold">AIR Board</h1>
+      </header>
 
       {/* Timer Display */}
       {timerSettings.isRunning && timerSettings.remainingSeconds !== null && (
-        <div className="flex-shrink-0 max-w-7xl mx-auto w-full px-4 py-6">
+        <div className="flex-shrink-0 w-full px-4 py-4 bg-background border-b">
           <div className="space-y-4">
             <Timer
               remainingSeconds={timerSettings.remainingSeconds}
               onTimeUp={handleTimerComplete}
+              onFinishEarly={handleFinishEarly}
             />
             {/* Active Topic Display */}
             {timerSettings.currentTopicId && (() => {
               const currentTopic = topics.find(t => t._id === timerSettings.currentTopicId);
               return currentTopic ? (
-                <div className="bg-white rounded-xl shadow-lg p-6 border-l-4" style={{ borderLeftColor: '#005596' }}>
+                <div className="bg-card rounded-xl shadow-sm p-6 border">
                   <div className="flex items-start gap-4 min-w-0">
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-2xl font-bold text-gray-900 mb-3 truncate break-words">{currentTopic.title}</h2>
+                      <h2 className="text-2xl font-bold text-foreground mb-3 truncate break-words">{currentTopic.title}</h2>
                       {currentTopic.description && (
-                        <p className="text-gray-700 whitespace-pre-wrap break-words line-clamp-3">{currentTopic.description}</p>
+                        <p className="text-muted-foreground whitespace-pre-wrap break-words line-clamp-3">{currentTopic.description}</p>
                       )}
-                      <p className="text-sm text-gray-500 mt-3 truncate">by {currentTopic.author}</p>
+                      <p className="text-sm text-muted-foreground mt-3 truncate">by {currentTopic.author}</p>
                     </div>
                   </div>
                 </div>
               ) : null;
             })()}
-            <div className="flex justify-center">
-              <button
-                onClick={handleFinishEarly}
-                className="flex items-center gap-2 px-6 py-3 bg-white border-2 font-semibold rounded-lg hover:bg-gray-50 transition shadow-md"
-                style={{ borderColor: '#005596', color: '#005596' }}
-              >
-                <StopIcon size={20} />
-                Finish Early
-              </button>
-            </div>
           </div>
         </div>
       )}
 
       {/* Board */}
-      <main className="flex-1 overflow-hidden min-h-0">
-        <div className="h-full min-h-0 max-w-7xl mx-auto w-full px-4 py-6">
-          <DndContext
-            sensors={sensors}
-            collisionDetection={pointerWithin}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 h-full w-full">
+      <main className="flex-1 overflow-auto min-h-0 p-4">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full w-full">
             <Column
               id="toDiscuss"
               title="To Discuss"
@@ -1161,508 +1063,313 @@ export default function Board({ user: initialUser, onLogout }: BoardProps) {
               onDelete={handleDeleteTopic}
               canManageDiscussions={isAdmin}
             />
-
-            <Column
-              id="actions"
-              title="Controls & Info"
-              topics={[]}
-              user={user}
-              onVote={handleVote}
-              onAddTopic={() => router.push('/history')}
-              buttonLabel="Discussion History"
-              buttonIcon={<HistoryIcon size={20} />}
-              canManageDiscussions={isAdmin}
-            >
-              <div className="flex flex-col h-full min-h-0 space-y-4">
-                {/* Discussion Duration */}
-                <div className="flex-shrink-0">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
-                    <ClockIcon size={16} />
-                    Discussion Duration
-                  </label>
-                  {isAdmin ? (
-                    <>
-                      <input
-                        type="range"
-                        min="1"
-                        max="20"
-                        value={timerSettings.durationMinutes}
-                        onChange={(e) => handleDurationChange(parseInt(e.target.value, 10))}
-                        className={`w-full h-2 bg-gray-200 rounded-lg appearance-none ${timerSettings.isRunning ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                        style={{ accentColor: '#005596' }}
-                        disabled={timerSettings.isRunning}
-                      />
-                      <div className="flex justify-between text-xs text-gray-600 mt-1">
-                        <span>1 min</span>
-                        <span className="font-bold" style={{ color: '#005596' }}>{timerSettings.durationMinutes} min</span>
-                        <span>20 min</span>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="w-full flex items-center justify-center">
-                      <span className="inline-flex items-center justify-center px-4 py-1 text-sm font-semibold text-blue-700 bg-blue-100 rounded-full w-full">
-                        {timerSettings.durationMinutes} minute{timerSettings.durationMinutes !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Participants with scroll */}
-                <div className="flex-1 flex flex-col min-h-0">
-                  <div className="flex items-center justify-between mb-2 flex-shrink-0">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
-                      <PeopleIcon size={16} />
-                      Participants
-                    </label>
-                    {isSelectMode && (
-                      selectedParticipants.size > 0 ? (
-                        <button
-                          onClick={() => setShowDeleteParticipantsModal(true)}
-                          className="p-1 hover:bg-red-100 rounded transition text-red-600"
-                          title="Delete selected participants"
-                        >
-                          <DeleteIcon size={18} />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setIsSelectMode(false)}
-                          className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition"
-                        >
-                          Cancel
-                        </button>
-                      )
-                    )}
-                    {!isSelectMode && (
-                      <button
-                        onClick={() => setIsSelectMode(true)}
-                        className="px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded transition"
-                      >
-                        Select
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2">
-                    {sortedUsers.map((participant) => (
-                      <div
-                        key={participant._id}
-                        className={`flex items-center justify-between text-sm p-2 bg-white rounded border border-gray-200 min-w-0 flex-shrink-0 transition ${
-                          isSelectMode ? 'hover:bg-gray-50 cursor-pointer' : ''
-                        }`}
-                        onClick={() => isSelectMode && handleToggleParticipantSelection(participant._id)}
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          {isSelectMode && (
-                            <input
-                              type="checkbox"
-                              checked={selectedParticipants.has(participant._id)}
-                              onChange={() => handleToggleParticipantSelection(participant._id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-4 h-4 rounded cursor-pointer"
-                            />
-                          )}
-                          <div className="flex items-center gap-1 min-w-0 flex-1">
-                            {/* Online Status Indicator */}
-                            {onlineUsers.has(participant._id) ? (
-                              <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0 animate-pulse" title="Online"></div>
-                            ) : (
-                              <div className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" title="Offline"></div>
-                            )}
-                            <span className="font-medium text-gray-700 truncate">{participant.name}</span>
-                            {/* Admin Badge - Only show if user is admin */}
-                            {participant.roles?.includes('admin') && (
-                              <ShieldIcon
-                                size={16}
-                                color="#2563eb"
-                              />
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-xs font-semibold px-2 py-1 rounded flex-shrink-0" style={{ backgroundColor: '#e6f2f9', color: '#005596' }}>
-                          {participant.votesRemaining} vote{participant.votesRemaining !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </Column>
           </div>
 
-            <DragOverlay>
-              {activeTopic ? (
-                <TopicCard
-                  topic={activeTopic}
-                  user={user}
-                  onVote={() => {}}
-                  canVote={false}
-                  isDraggable={false}
-                />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </div>
+          <DragOverlay>
+            {activeTopic ? (
+              <TopicCard
+                topic={activeTopic}
+                user={user}
+                onVote={() => {}}
+                canVote={false}
+                isDraggable={false}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </main>
 
       {/* Add Topic Modal */}
-      <Modal
-        isOpen={showAddTopicModal}
-        onClose={() => setShowAddTopicModal(false)}
-        title="Add New Topic"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Title *
-            </label>
-            <input
-              type="text"
-              value={newTopicTitle}
-              onChange={(e) => setNewTopicTitle(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent"
-              placeholder="Enter topic title"
-              autoFocus
-            />
-          </div>
+      <Dialog open={showAddTopicModal} onOpenChange={setShowAddTopicModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Topic</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="topic-title">Title *</Label>
+              <Input
+                id="topic-title"
+                value={newTopicTitle}
+                onChange={(e) => setNewTopicTitle(e.target.value)}
+                placeholder="Enter topic title"
+                autoFocus
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Description
-            </label>
-            <textarea
-              value={newTopicDescription}
-              onChange={(e) => setNewTopicDescription(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent resize-none"
-              placeholder="Add additional details (optional)"
-              rows={4}
-            />
+            <div className="space-y-2">
+              <Label htmlFor="topic-description">Description</Label>
+              <Textarea
+                id="topic-description"
+                value={newTopicDescription}
+                onChange={(e) => setNewTopicDescription(e.target.value)}
+                placeholder="Add additional details (optional)"
+                rows={4}
+                className="resize-none"
+              />
+            </div>
           </div>
-
-          <div className="flex gap-3 pt-2">
-            <button
+          <DialogFooter>
+            <Button
+              variant="outline"
               onClick={() => setShowAddTopicModal(false)}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
               disabled={isSubmitting}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleAddTopic}
               disabled={!newTopicTitle.trim() || isSubmitting}
-              className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition"
-              style={{ backgroundColor: !newTopicTitle.trim() || isSubmitting ? undefined : '#005596' }}
+              className="bg-[#005596] hover:bg-[#004478] text-white"
             >
               {isSubmitting ? 'Adding...' : 'Add Topic'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm Discuss Modal */}
-      <Modal
-        isOpen={showConfirmDiscussModal}
-        onClose={() => {
+      <AlertDialog open={showConfirmDiscussModal} onOpenChange={(open) => {
+        if (!open) {
           setShowConfirmDiscussModal(false);
           setPendingTopicMove(null);
-        }}
-        title="Start Discussion?"
-      >
-        <p className="mb-6">Are you sure you want to start discussing this topic?</p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
+        }
+      }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start Discussion?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to start discussing this topic?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
               setShowConfirmDiscussModal(false);
               setPendingTopicMove(null);
-            }}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleConfirmDiscuss}
-            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition"
-            style={{ backgroundColor: '#005596' }}
-          >
-            Confirm
-          </button>
-        </div>
-      </Modal>
+            }}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDiscuss}
+              className="bg-[#005596] hover:bg-[#004478]"
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {/* Voting Modal */}
-      <Modal
-        isOpen={showVotingModal}
-        onClose={() => {
-          // Resume timer if it was paused
-          if (timerSettings.isPaused && timerSettings.pausedRemainingSeconds !== null) {
-            // Calculate new startTime to maintain the remaining seconds
-            const newStartTime = Date.now() - (timerSettings.durationMinutes * 60 * 1000 - timerSettings.pausedRemainingSeconds * 1000);
-            setTimerSettings({
-              ...timerSettings,
-              isRunning: true,
-              isPaused: false,
-              startTime: newStartTime,
-              remainingSeconds: timerSettings.pausedRemainingSeconds,
-              pausedRemainingSeconds: null,
-            });
-          }
+      {/* Admin Timer Choice Modal - only admin sees this when timer expires */}
+      <Dialog open={showAdminTimerChoice} onOpenChange={(open) => {
+        if (!open) setShowAdminTimerChoice(false);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{"Time's Up!"}</DialogTitle>
+          </DialogHeader>
+          {showAddTimeSlider ? (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">Select additional time to continue the discussion:</p>
+              <div className="space-y-2">
+                <Slider
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={[additionalMinutes]}
+                  onValueChange={(value) => setAdditionalMinutes(value[0])}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1 min</span>
+                  <span className="font-bold text-lg text-[#005596]">{additionalMinutes} minutes</span>
+                  <span>20 min</span>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAddTimeSlider(false)}>
+                  Back
+                </Button>
+                <Button
+                  onClick={handleAddTimeConfirm}
+                  className="bg-[#005596] hover:bg-[#004478] text-white"
+                >
+                  Add Time &amp; Continue
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">What would you like to do?</p>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={handleAdminFinishTopic}
+                  className="w-full font-semibold bg-green-50 text-green-700 border-green-200 hover:bg-green-600 hover:text-white hover:border-green-600"
+                  variant="outline"
+                  size="lg"
+                >
+                  Finish Topic
+                </Button>
+                <Button
+                  onClick={handleAdminStartVoting}
+                  className="w-full font-semibold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600"
+                  variant="outline"
+                  size="lg"
+                >
+                  Start Voting
+                </Button>
+                <Button
+                  onClick={() => {
+                    setAdditionalMinutes(timerSettings.durationMinutes);
+                    setShowAddTimeSlider(true);
+                  }}
+                  className="w-full font-semibold bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-600 hover:text-white hover:border-amber-600"
+                  variant="outline"
+                  size="lg"
+                >
+                  Add More Time
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Voting Modal - all users see this when voting is active */}
+      <Dialog open={showVotingModal} onOpenChange={(open) => {
+        if (!open && !isVotingActive) {
           setShowVotingModal(false);
           setUserVote(null);
-          setShowAddTimeSlider(false);
-        }}
-        title={showAddTimeSlider ? "Add More Time" : "Time's Up! Vote on Next Action"}
-        showCloseButton={true}
-      >
-        {showAddTimeSlider && user?.roles?.includes('admin') ? (
-          // Add time slider UI
-          <div className="space-y-4">
-            <p className="text-gray-700">Select additional time to continue the discussion:</p>
-            <div>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={additionalMinutes}
-                onChange={(e) => setAdditionalMinutes(parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                style={{ accentColor: '#005596' }}
-              />
-              <div className="flex justify-between text-xs text-gray-600 mt-1">
-                <span>1 min</span>
-                <span className="font-bold text-lg" style={{ color: '#005596' }}>{additionalMinutes} minutes</span>
-                <span>10 min</span>
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {showAddTimeSlider ? 'Add More Time' : (isVotingActive ? 'Vote on Next Action' : "Time's Up!")}
+            </DialogTitle>
+          </DialogHeader>
+          {showAddTimeSlider && isAdmin ? (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">Select additional time to continue the discussion:</p>
+              <div className="space-y-2">
+                <Slider
+                  min={1}
+                  max={20}
+                  step={1}
+                  value={[additionalMinutes]}
+                  onValueChange={(value) => setAdditionalMinutes(value[0])}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>1 min</span>
+                  <span className="font-bold text-lg text-[#005596]">{additionalMinutes} minutes</span>
+                  <span>20 min</span>
+                </div>
               </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAddTimeSlider(false)}>
+                  Back
+                </Button>
+                <Button
+                  onClick={handleAddTimeConfirm}
+                  className="bg-[#005596] hover:bg-[#004478] text-white"
+                >
+                  Add Time &amp; Continue
+                </Button>
+              </DialogFooter>
             </div>
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => {
-                  setShowAddTimeSlider(false);
-                  setShowVotingModal(false);
-                  setUserVote(null);
-                }}
-                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddTimeConfirm}
-                className="flex-1 px-4 py-3 text-white rounded-lg hover:opacity-90 transition"
-                style={{ backgroundColor: '#005596' }}
-              >
-                Add Time & Continue
-              </button>
-            </div>
-          </div>
-        ) : timerExpired ? (
-          // Timer expired - show 3 large circles with voting options
-          <>
-            <p className="mb-8 text-center text-gray-700 font-semibold">How should we proceed with this topic?</p>
-            <div className="flex justify-center gap-6 mb-8">
-              {/* Against - Thumbs Down */}
-              <button
-                onClick={() => handleVoteSubmit('against')}
-                disabled={userVote !== null}
-                onMouseEnter={() => setHoveredVote('against')}
-                onMouseLeave={() => setHoveredVote(null)}
-                className={`flex flex-col items-center gap-3 transition cursor-pointer ${
-                  userVote === 'against' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
-                } disabled:cursor-not-allowed`}
-              >
-                <div
-                  className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
-                    userVote === 'against'
-                      ? 'bg-red-600 scale-110'
-                      : hoveredVote === 'against' ? 'bg-red-600' : 'bg-red-100'
+          ) : isVotingActive ? (
+            <div className="space-y-4 py-2">
+              <p className="text-muted-foreground">Should we finish this topic or continue the discussion?</p>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={() => handleVoteSubmit('finish')}
+                  disabled={userVote !== null}
+                  variant={userVote === 'finish' ? 'default' : 'outline'}
+                  className={`w-full font-semibold ${
+                    userVote === 'finish'
+                      ? 'bg-green-600 hover:bg-green-600 text-white'
+                      : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-600 hover:text-white hover:border-green-600'
                   }`}
+                  size="lg"
                 >
-                  <ThumbsDownIcon 
-                    size={40} 
-                    color={userVote === 'against' || hoveredVote === 'against' ? '#ffffff' : '#dc2626'}
-                  />
-                </div>
-                <span className="text-sm font-semibold text-gray-700">Against</span>
-              </button>
-
-              {/* Neutral - Equal Sign */}
-              <button
-                onClick={() => handleVoteSubmit('neutral')}
-                disabled={userVote !== null}
-                onMouseEnter={() => setHoveredVote('neutral')}
-                onMouseLeave={() => setHoveredVote(null)}
-                className={`flex flex-col items-center gap-3 transition cursor-pointer ${
-                  userVote === 'neutral' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
-                } disabled:cursor-not-allowed`}
-              >
-                <div
-                  className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
-                    userVote === 'neutral'
-                      ? 'bg-yellow-600 scale-110'
-                      : hoveredVote === 'neutral' ? 'bg-yellow-600' : 'bg-yellow-100'
+                  {userVote === 'finish' && <Check className="h-5 w-5" />}
+                  Finish Topic
+                  <Badge variant="secondary" className="ml-2">{voteResults.finish.length}</Badge>
+                </Button>
+                <Button
+                  onClick={() => handleVoteSubmit('continue')}
+                  disabled={userVote !== null}
+                  variant={userVote === 'continue' ? 'default' : 'outline'}
+                  className={`w-full font-semibold ${
+                    userVote === 'continue'
+                      ? 'bg-blue-600 hover:bg-blue-600 text-white'
+                      : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600'
                   }`}
+                  size="lg"
                 >
-                  <EqualIcon 
-                    size={40} 
-                    color={userVote === 'neutral' || hoveredVote === 'neutral' ? '#ffffff' : '#ca8a04'}
-                  />
-                </div>
-                <span className="text-sm font-semibold text-gray-700">Neutral</span>
-              </button>
-
-              {/* Favor - Thumbs Up */}
-              <button
-                onClick={() => handleVoteSubmit('favor')}
-                disabled={userVote !== null}
-                onMouseEnter={() => setHoveredVote('favor')}
-                onMouseLeave={() => setHoveredVote(null)}
-                className={`flex flex-col items-center gap-3 transition cursor-pointer ${
-                  userVote === 'favor' ? 'opacity-100' : 'opacity-75 hover:opacity-100'
-                } disabled:cursor-not-allowed`}
-              >
-                <div
-                  className={`w-20 h-20 rounded-full flex items-center justify-center transition ${
-                    userVote === 'favor'
-                      ? 'bg-green-600 scale-110'
-                      : hoveredVote === 'favor' ? 'bg-green-600' : 'bg-green-100'
-                  }`}
-                >
-                  <ThumbsUpIcon 
-                    size={40} 
-                    color={userVote === 'favor' || hoveredVote === 'favor' ? '#ffffff' : '#16a34a'}
-                  />
-                </div>
-                <span className="text-sm font-semibold text-gray-700">Favor</span>
-              </button>
-            </div>
-
-            {/* Vote Count Display */}
-            <div className="bg-gray-100 rounded-lg p-4 mb-6">
-              <div className="flex justify-between items-center mb-3">
-                <p className="text-sm font-semibold text-gray-700">Current Votes</p>
-                <p className="text-xs text-gray-600">
-                  {voteCount.against + voteCount.neutral + voteCount.favor} / {onlineUsers.size} voted
-                </p>
+                  {userVote === 'continue' && <Check className="h-5 w-5" />}
+                  Continue Discussion
+                  <Badge variant="secondary" className="ml-2">{voteResults.continue.length}</Badge>
+                </Button>
               </div>
-              <div className="flex justify-around">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{voteCount.against}</div>
-                  <div className="text-xs text-gray-600">Against</div>
+
+              {/* Admin resolution controls */}
+              {isAdmin && (
+                <div className="border-t pt-4 mt-4 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Admin Decision</p>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleAdminResolveVote('finish')}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                      size="sm"
+                    >
+                      Resolve: Finish
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setAdditionalMinutes(timerSettings.durationMinutes);
+                        handleAdminResolveVote('continue');
+                      }}
+                      className="flex-1 bg-[#005596] hover:bg-[#004478] text-white"
+                      size="sm"
+                    >
+                      Resolve: Add Time
+                    </Button>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-yellow-600">{voteCount.neutral}</div>
-                  <div className="text-xs text-gray-600">Neutral</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{voteCount.favor}</div>
-                  <div className="text-xs text-gray-600">Favor</div>
-                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <div className="animate-pulse text-muted-foreground text-center">
+                <p className="text-lg font-medium">Waiting for admin decision...</p>
+                <p className="text-sm mt-1">The admin will decide whether to finish or start a vote.</p>
               </div>
             </div>
-
-            {/* Admin Controls - Only show if current user is admin */}
-            {user?.roles?.includes('admin') ? (
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowAddTimeSlider(true)}
-                  className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center gap-2"
-                >
-                  <ClockIcon size={20} className="text-white" />
-                  Add More Time
-                </button>
-                <button
-                  onClick={handleAdminFinishDiscussion}
-                  className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold flex items-center justify-center gap-2"
-                >
-                  <CheckIcon size={20} color="white" />
-                  Finish Discussion
-                </button>
-              </div>
-            ) : (
-              <div className="text-center">
-                <p className="text-sm text-gray-600 mb-3">Waiting for admin to decide...</p>
-                <button
-                  onClick={() => {
-                    setShowVotingModal(false);
-                    setUserVote(null);
-                  }}
-                  className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition"
-                >
-                  Close
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          // Finish early - show 2 buttons
-          <>
-            <p className="mb-6">Should we finish this topic or continue the discussion?</p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => handleVoteSubmit('finish')}
-                disabled={userVote !== null}
-                className={`w-full px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                  userVote === 'finish'
-                    ? 'bg-green-600 text-white'
-                    : 'bg-green-100 text-green-700 hover:bg-green-600 hover:text-white'
-                } disabled:cursor-not-allowed`}
-              >
-                <CheckIcon size={20} color="currentColor" />
-                {userVote === 'finish' ? 'Voted to ' : ''}Finish Topic
-              </button>
-              <button
-                onClick={() => handleVoteSubmit('continue')}
-                disabled={userVote !== null}
-                className={`w-full px-4 py-3 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
-                  userVote === 'continue'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white'
-                } disabled:cursor-not-allowed`}
-              >
-                <ClockIcon size={20} className="text-current" />
-                {userVote === 'continue' ? 'Voted to ' : ''}Continue Topic
-              </button>
-            </div>
-          </>
-        )}
-      </Modal>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Participants Modal */}
-      <Modal
-        isOpen={showDeleteParticipantsModal}
-        onClose={() => setShowDeleteParticipantsModal(false)}
-        title="Delete Participants?"
-      >
-        <p className="mb-6 text-gray-700">
-          Are you sure you want to delete {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''}? This action cannot be undone.
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={() => setShowDeleteParticipantsModal(false)}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleDeleteParticipants}
-            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 transition"
-            style={{ backgroundColor: '#dc2626' }}
-          >
-            Delete
-          </button>
-        </div>
-      </Modal>
-
-      {/* Bug Report Modal */}
-      <BugReportModal
-        isOpen={showBugReportModal}
-        onClose={() => setShowBugReportModal(false)}
-      />
-
-      {/* Changelog Modal */}
-      <ChangelogModal
-        isOpen={showChangelogModal}
-        onClose={() => setShowChangelogModal(false)}
-      />
-
-      {/* Footer */}
-      <Footer />
+      <AlertDialog open={showDeleteParticipantsModal} onOpenChange={setShowDeleteParticipantsModal}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Participants?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedParticipants.size} participant{selectedParticipants.size !== 1 ? 's' : ''}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteParticipants}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

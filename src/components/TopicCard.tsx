@@ -10,6 +10,10 @@ import ThumbUpIcon from './icons/ThumbUpIcon';
 import ThumbDownIcon from './icons/ThumbDownIcon';
 import ArchiveIcon from './icons/ArchiveIcon';
 import Modal from './Modal';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 
 interface TopicCardProps {
   topic: Topic;
@@ -153,21 +157,21 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
         {...attributes}
         {...(isDraggable ? listeners : {})}
         onClick={handleCardClick}
-        className={`bg-white rounded-lg shadow-md p-4 border-2 border-gray-200 hover:shadow-lg transition-shadow ${
+        className={`bg-card rounded-lg shadow-sm p-3 border hover:shadow-md transition-shadow overflow-hidden ${
           isDraggable ? 'cursor-grab active:cursor-grabbing hover:cursor-pointer' : 'cursor-pointer'
         } ${isDragging ? 'z-50' : ''}`}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-gray-900 mb-1 truncate break-words">
+            <h3 className="font-semibold text-foreground mb-1 truncate break-words text-sm">
               {topic.title}
             </h3>
             {topic.description && (
-              <p className="text-sm text-gray-600 line-clamp-2 break-words">
+              <p className="text-xs text-muted-foreground line-clamp-2 break-words">
                 {topic.description}
               </p>
             )}
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               by {topic.author}
             </p>
           </div>
@@ -177,16 +181,18 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
             <button
               onClick={handleVoteClick}
               disabled={!canVote && !hasUserVoted}
-              className={`flex items-center justify-center w-8 h-8 rounded-full font-semibold text-xs transition-all duration-300 group ${
-                hasUserVoted
-                  ? 'bg-blue-100 text-blue-600 hover:bg-red-600 hover:text-white cursor-pointer'
+              className={`flex items-center justify-center w-8 h-8 shrink-0 rounded-full font-semibold text-xs transition-all duration-300 group ${
+                topic.votes > 0 || hasUserVoted
+                  ? 'cursor-pointer'
                   : canVote
-                  ? 'bg-gray-200 text-gray-600 hover:text-white cursor-pointer'
-                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'bg-muted text-muted-foreground hover:text-white cursor-pointer'
+                  : 'bg-muted text-muted-foreground/50 cursor-not-allowed'
               }`}
               style={
-                hasUserVoted
-                  ? { backgroundColor: '#e6f2f9', color: '#005596' }
+                topic.votes > 0
+                  ? { backgroundColor: '#005596', color: 'white' }
+                  : hasUserVoted
+                  ? { backgroundColor: '#005596', color: 'white' }
                   : {}
               }
               onMouseEnter={(e) => {
@@ -201,9 +207,12 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                 }
               }}
               onMouseLeave={(e) => {
-                if (hasUserVoted) {
-                  e.currentTarget.style.backgroundColor = '#e6f2f9';
-                  e.currentTarget.style.color = '#005596';
+                if (topic.votes > 0) {
+                  e.currentTarget.style.backgroundColor = '#005596';
+                  e.currentTarget.style.color = 'white';
+                } else if (hasUserVoted) {
+                  e.currentTarget.style.backgroundColor = '#005596';
+                  e.currentTarget.style.color = 'white';
                 } else if (canVote && !hasUserVoted) {
                   e.currentTarget.style.backgroundColor = '';
                   e.currentTarget.style.color = '';
@@ -211,10 +220,7 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
               }}
               title={hasUserVoted ? 'Click to remove your vote' : 'Click to vote'}
             >
-              {/* Compact view: only number */}
               <span className="group-hover:hidden transition-opacity duration-300">{topic.votes}</span>
-              
-              {/* Expanded view: only icon */}
               <span className="hidden group-hover:flex items-center justify-center transition-opacity duration-300">
                 {hasUserVoted ? (
                   <ThumbDownIcon size={14} filled={true} />
@@ -232,22 +238,16 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
                 e.stopPropagation();
                 setShowArchiveConfirm(true);
               }}
-              className="flex items-center justify-center w-8 h-8 rounded-full text-gray-400 hover:text-white transition-all duration-300 group bg-gray-200 hover:bg-blue-600 cursor-pointer"
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#005596';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '';
-              }}
+              className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full text-muted-foreground hover:text-white transition-all duration-300 bg-muted hover:bg-[#005596] cursor-pointer"
               title="Archive topic"
             >
-              <ArchiveIcon size={16} />
+              <ArchiveIcon size={14} />
             </button>
           )}
           
           {topic.status !== 'to-discuss' && topic.status !== 'discussed' && topic.votes > 0 && (
-            <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-gray-100 text-gray-700 font-semibold text-sm">
-              <ThumbUpIcon size={16} />
+            <div className="flex items-center gap-1 px-2 py-1 shrink-0 rounded-full bg-muted text-muted-foreground font-semibold text-xs">
+              <ThumbUpIcon size={14} />
               <span>{topic.votes}</span>
             </div>
           )}
@@ -263,77 +263,73 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
         <div className="space-y-4">
           {!isDeleteConfirming ? (
             <>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title
-                </label>
-                <input
-                  type="text"
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
+                <Input
+                  id="edit-title"
                   value={editedTitle}
                   onChange={(e) => handleTitleChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Topic title"
                   disabled={!canEdit}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
-                <textarea
+              <div className="space-y-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
                   value={editedDescription}
                   onChange={(e) => handleDescriptionChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                   rows={4}
                   placeholder="Description (optional)"
                   disabled={!canEdit}
+                  className="resize-none"
                 />
               </div>
 
               <div className="flex gap-3 justify-end pt-4 border-t">
                 {canEdit && (
                   <>
-                    <button
+                    <Button
+                      variant="destructive"
                       onClick={handleDeleteClick}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition"
+                      className="bg-red-100 text-red-700 hover:bg-red-200 border-0"
                     >
                       Delete
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       onClick={handleSave}
                       disabled={!hasChanges || isSaving}
-                      className="px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-400 transition"
-                      style={{ backgroundColor: hasChanges && !isSaving ? '#005596' : undefined }}
+                      className="bg-[#005596] hover:bg-[#004478] text-white"
                     >
                       {isSaving ? 'Saving...' : 'Save'}
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
             </>
           ) : (
             <div className="space-y-4">
-              <p className="text-gray-700 font-medium">
+              <p className="text-foreground font-medium">
                 Really want to delete this topic?
               </p>
               <div className="flex gap-3 justify-end pt-4 border-t">
-                <button
+                <Button
+                  variant="outline"
                   onClick={() => {
                     setIsDeleteConfirming(false);
                     setDeleteCountdown(5);
                   }}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="destructive"
                   onClick={handleConfirmDelete}
                   disabled={deleteCountdown > 0}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 transition"
                 >
                   {deleteCountdown > 0 ? `Delete (${deleteCountdown}s)` : 'Confirm Delete'}
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -347,23 +343,23 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
         title="Archive Topic"
       >
         <div className="space-y-4">
-          <p className="text-gray-700">
+          <p className="text-muted-foreground">
             Are you sure you want to archive this topic? It will no longer appear in the Discussed column.
           </p>
           <div className="flex gap-3 justify-end pt-4 border-t">
-            <button
+            <Button
+              variant="outline"
               onClick={() => setShowArchiveConfirm(false)}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={handleArchive}
               disabled={isArchiving}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition"
+              className="bg-[#005596] hover:bg-[#004478] text-white"
             >
               {isArchiving ? 'Archiving...' : 'Archive'}
-            </button>
+            </Button>
           </div>
         </div>
       </Modal>

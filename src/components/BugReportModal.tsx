@@ -3,8 +3,19 @@
 import { useState } from 'react';
 import { toast } from '@/lib/toast';
 import confetti from 'canvas-confetti';
+import { Loader2 } from 'lucide-react';
 import Modal from './Modal';
-import LoadingSpinner from './LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface BugReportModalProps {
   isOpen: boolean;
@@ -124,67 +135,66 @@ export default function BugReportModal({ isOpen, onClose }: BugReportModalProps)
     >
       <div className="space-y-4">
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Bug Title *
-          </label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="bug-title">Bug Title *</Label>
+          <Input
+            id="bug-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Brief description of the bug"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             disabled={isSubmitting}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Description *
-          </label>
-          <textarea
+        <div className="space-y-2">
+          <Label htmlFor="bug-description">Description *</Label>
+          <Textarea
+            id="bug-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Detailed description of the issue, steps to reproduce, and expected behavior"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
             rows={5}
+            className="resize-none"
             disabled={isSubmitting}
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Severity
-          </label>
-          <select
+        <div className="space-y-2">
+          <Label>Severity</Label>
+          <Select
             value={severity}
-            onChange={(e) => setSeverity(e.target.value as 'low' | 'medium' | 'high')}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            onValueChange={(value) => setSeverity(value as 'low' | 'medium' | 'high')}
             disabled={isSubmitting}
           >
-            <option value="low">Low - Minor issue, doesn't affect functionality</option>
-            <option value="medium">Medium - Noticeable issue, some impact on usage</option>
-            <option value="high">High - Critical issue, major impact on functionality</option>
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select severity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">Low - Minor issue, doesn&apos;t affect functionality</SelectItem>
+              <SelectItem value="medium">Medium - Noticeable issue, some impact on usage</SelectItem>
+              <SelectItem value="high">High - Critical issue, major impact on functionality</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex gap-3 pt-2">
-          <button
+          <Button
+            variant="outline"
             onClick={handleClose}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
             disabled={isSubmitting}
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSubmit}
             disabled={!title.trim() || !description.trim() || isSubmitting || isSubmitted}
-            className="flex-1 px-4 py-2 text-white rounded-lg hover:opacity-90 disabled:bg-gray-300 disabled:cursor-not-allowed transition flex items-center justify-center gap-2"
-            style={{ backgroundColor: !title.trim() || !description.trim() || isSubmitting || isSubmitted ? undefined : '#005596' }}
+            className="flex-1 bg-[#005596] hover:bg-[#004478]"
           >
-            {isSubmitting && <LoadingSpinner size={16} color="white" />}
+            {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             {isSubmitting ? 'Submitting...' : isSubmitted ? 'Report Sent!' : 'Submit Report'}
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>

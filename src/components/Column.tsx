@@ -4,8 +4,9 @@ import { Topic, User, ColumnType } from '@/types';
 import TopicCard from './TopicCard';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import AddIcon from './icons/AddIcon';
-import HistoryIcon from './icons/HistoryIcon';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface ColumnProps {
   id: ColumnType;
@@ -33,30 +34,28 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, bu
 
   const canVote = user.votesRemaining > 0;
 
-  // For "To Discuss" column, separate topics into voted and new
   const isToDiscussColumn = id === 'toDiscuss';
   const topVotedTopics = isToDiscussColumn ? topics.filter(t => t.votes > 0).sort((a, b) => b.votes - a.votes) : [];
   const newTopics = isToDiscussColumn ? topics.filter(t => t.votes === 0) : [];
   const regularTopics = !isToDiscussColumn ? topics : [];
 
-  // Determine if this column is draggable
-  const isDraggableColumn = (id === 'discussing' || id === 'discussed') && canManageDiscussions;
+  const isDraggableColumn = id === 'discussing' || id === 'discussed';
 
   return (
-    <div className={`flex flex-col flex-1 w-full h-full min-h-0 bg-gray-50 rounded-xl shadow-sm transition-all ${
-      isDraggableColumn && isOver ? 'border-2 border-dashed border-blue-500' : 'border-2 border-transparent'
+    <div className={`flex flex-col flex-1 w-full h-full min-h-0 min-w-0 bg-card rounded-xl border shadow-sm transition-all overflow-hidden ${
+      isDraggableColumn && isOver ? 'border-2 border-dashed border-primary' : ''
     }`}>
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 min-w-0">
-        <h2 className="text-lg font-bold text-gray-900 truncate">{title}</h2>
+      <div className="flex items-center justify-between px-4 py-3 border-b min-w-0 shrink-0">
+        <h2 className="text-base font-semibold text-foreground truncate">{title}</h2>
         {id !== 'actions' && (
-          <span className="text-sm font-semibold text-gray-600 bg-gray-200 px-2 py-1 rounded-full flex-shrink-0">
+          <Badge variant="secondary" className="text-xs shrink-0">
             {topics.length}
-          </span>
+          </Badge>
         )}
       </div>
 
       {children && (
-        <div className="flex-1 min-h-0 overflow-y-auto border-b border-gray-200">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="p-4 space-y-4">
             {children}
           </div>
@@ -66,106 +65,108 @@ export default function Column({ id, title, topics, user, onVote, onAddTopic, bu
       {!children && (
         <div
           ref={setNodeRef}
-          className={`flex-1 min-h-0 overflow-y-auto transition-colors ${
-            isDraggableColumn && isOver ? 'bg-blue-100' : 'bg-gray-50'
+          className={`flex-1 min-h-0 min-w-0 overflow-hidden transition-colors ${
+            isDraggableColumn && isOver ? 'bg-primary/5' : ''
           }`}
         >
-          <div className="p-4 space-y-4 min-h-[300px]">
-        {isToDiscussColumn ? (
-          <>
-            {topVotedTopics.length > 0 && (
-              <div>
-                <div className="text-xs font-semibold text-purple-600 uppercase tracking-wider mb-3">
-                  Top Voted
-                </div>
-                <SortableContext items={topVotedTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-3">
-                    {topVotedTopics.map((topic) => (
-                      <TopicCard
-                        key={topic._id}
-                        topic={topic}
-                        user={user}
-                        onVote={onVote}
-                        canVote={canVote}
-                        isDraggable={true}
-                        onUpdate={onUpdate}
-                        onDelete={onDelete}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </div>
-            )}
+          <div className="h-full overflow-y-auto">
+            <div className="p-3 space-y-2">
+              {isToDiscussColumn ? (
+                <>
+                  {topVotedTopics.length > 0 && (
+                    <div className="bg-[#005596]/[0.03] -mx-3 px-3 py-3 rounded-lg">
+                      <div className="text-xs font-semibold text-[#005596] uppercase tracking-wider mb-2">
+                        Top Voted
+                      </div>
+                      <SortableContext items={topVotedTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {topVotedTopics.map((topic) => (
+                            <TopicCard
+                              key={topic._id}
+                              topic={topic}
+                              user={user}
+                              onVote={onVote}
+                              canVote={canVote}
+                              isDraggable={true}
+                              onUpdate={onUpdate}
+                              onDelete={onDelete}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </div>
+                  )}
 
-            {newTopics.length > 0 && (
-              <div>
-                <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
-                  New Topics
-                </div>
-                <SortableContext items={newTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-3">
-                    {newTopics.map((topic) => (
-                      <TopicCard
-                        key={topic._id}
-                        topic={topic}
-                        user={user}
-                        onVote={onVote}
-                        canVote={canVote}
-                        onUpdate={onUpdate}
-                        onDelete={onDelete}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </div>
-            )}
+                  {newTopics.length > 0 && (
+                    <div className={topVotedTopics.length > 0 ? 'pt-1' : ''}>
+                      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                        New Topics
+                      </div>
+                      <SortableContext items={newTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {newTopics.map((topic) => (
+                            <TopicCard
+                              key={topic._id}
+                              topic={topic}
+                              user={user}
+                              onVote={onVote}
+                              canVote={canVote}
+                              onUpdate={onUpdate}
+                              onDelete={onDelete}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </div>
+                  )}
 
-            {topics.length === 0 && (
-              <div className="text-center text-gray-400 py-8">
-                No topics yet
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <SortableContext items={regularTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-3">
-                {regularTopics.map((topic) => (
-                  <TopicCard
-                    key={topic._id}
-                    topic={topic}
-                    user={user}
-                    onVote={onVote}
-                    canVote={false}
-                    isDraggable={isDraggableColumn}
-                    onUpdate={onUpdate}
-                    onDelete={onDelete}
-                  />
-                ))}
-              </div>
-            </SortableContext>
+                  {topics.length === 0 && (
+                    <div className="text-center text-muted-foreground py-8">
+                      No topics yet
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <SortableContext items={regularTopics.map(t => t._id)} strategy={verticalListSortingStrategy}>
+                    <div className="space-y-2">
+                      {regularTopics.map((topic) => (
+                        <TopicCard
+                          key={topic._id}
+                          topic={topic}
+                          user={user}
+                          onVote={onVote}
+                          canVote={false}
+                          isDraggable={isDraggableColumn}
+                          onUpdate={onUpdate}
+                          onDelete={onDelete}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
 
-            {topics.length === 0 && id !== 'actions' && (
-              <div className="text-center text-gray-400 py-8">
-                No topics yet
-              </div>
-            )}
-          </>
-        )}
+                  {topics.length === 0 && id !== 'actions' && (
+                    <div className="text-center text-muted-foreground py-8">
+                      No topics yet
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {onAddTopic && (
-        <div className="p-4 border-t border-gray-200">
-          <button
+        <div className="p-3 border-t shrink-0">
+          <Button
             onClick={onAddTopic}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-white font-semibold rounded-lg transition hover:opacity-90"
-            style={{ backgroundColor: '#005596' }}
+            className="w-full bg-[#005596] hover:bg-[#004478] text-white"
+            size="lg"
           >
-            {buttonIcon || <AddIcon size={20} />}
+            {buttonIcon || <Plus className="h-5 w-5" />}
             {buttonLabel || 'Add Topic'}
-          </button>
+          </Button>
         </div>
       )}
     </div>

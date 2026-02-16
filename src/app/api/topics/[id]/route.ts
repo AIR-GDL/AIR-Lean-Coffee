@@ -2,16 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Topic from '@/models/Topic';
 import User from '@/models/User';
-import pusher from '@/lib/pusher';
-
-// Helper function to trigger Pusher events
-async function triggerPusherEvent(channel: string, event: string, data: any) {
-  try {
-    await pusher.trigger(channel, event, data);
-  } catch (error) {
-    console.error(`Failed to trigger Pusher event ${event}:`, error);
-  }
-}
+import pusherServer, { CHANNELS, EVENTS } from '@/lib/pusher-server';
 
 export async function PUT(
   request: NextRequest,
@@ -85,6 +76,13 @@ export async function PUT(
         await user.save();
       }
 
+      await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_UPDATED, {
+        topic,
+      });
+      await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.USER_UPDATED, {
+        user,
+      });
+
       return NextResponse.json({ topic, user }, { status: 200 });
     }
 
@@ -153,14 +151,22 @@ export async function PUT(
       
       await topic.save();
 
-      // Trigger Pusher events for timer update if duration changed
-      if (durationChanged && topic.status === 'discussing') {
-        await triggerPusherEvent('timer', 'timer-updated', {
+      // Trigger appropriate Pusher events based on status change
+      if (status === 'discussing' && discussionStartTime) {
+        await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.DISCUSSION_STARTED, {
           topicId: id,
-          durationMinutes: topic.discussionDurationMinutes,
-          startTime: topic.discussionStartTime ? new Date(topic.discussionStartTime).getTime() : Date.now(),
+          startTime: discussionStartTime,
+          durationMinutes: discussionDurationMinutes,
+        });
+      } else if (status === 'discussed') {
+        await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.DISCUSSION_FINISHED, {
+          topicId: id,
         });
       }
+
+      await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_UPDATED, {
+        topic,
+      });
 
       return NextResponse.json(topic, { status: 200 });
     }
@@ -178,6 +184,10 @@ export async function PUT(
         { status: 404 }
       );
     }
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_UPDATED, {
+      topic,
+    });
 
     return NextResponse.json(topic, { status: 200 });
   } catch (error) {
@@ -206,6 +216,10 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_DELETED, {
+      topicId: id,
+    });
 
     return NextResponse.json(
       { message: 'Topic deleted successfully', topic },

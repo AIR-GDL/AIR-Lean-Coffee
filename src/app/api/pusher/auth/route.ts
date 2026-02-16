@@ -1,41 +1,62 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pusher from '@/lib/pusher';
+import pusherServer from '@/lib/pusher-server';
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { socket_id, channel_name } = body;
+    const body = await request.text();
+    const params = new URLSearchParams(body);
+    const socketId = params.get('socket_id');
+    const channelName = params.get('channel_name');
 
-    if (!socket_id || !channel_name) {
+    if (!socketId || !channelName) {
       return NextResponse.json(
         { error: 'Missing socket_id or channel_name' },
         { status: 400 }
       );
     }
 
-    // Get user from session
-    const userStr = request.headers.get('x-user') || '{}';
-    let user;
-    try {
-      user = JSON.parse(userStr);
-    } catch {
-      user = {};
+    if (!pusherServer) {
+      return NextResponse.json(
+        { error: 'Pusher not configured' },
+        { status: 503 }
+      );
     }
 
-    // Authenticate the channel
-    const auth = pusher.authorizeChannel(socket_id, channel_name, {
-      user_id: user._id || 'anonymous',
-      user_info: {
-        name: user.name || 'Anonymous',
-        email: user.email || '',
-      },
-    });
+    // For presence channels, we need user info
+    if (channelName.startsWith('presence-')) {
+      // Get user info from the request headers or cookies
+      const userInfoHeader = request.headers.get('x-user-info');
+      let userData = { id: socketId, name: 'Anonymous' };
 
-    return NextResponse.json(auth);
+      if (userInfoHeader) {
+        try {
+          const parsed = JSON.parse(userInfoHeader);
+          userData = {
+            id: parsed.email || socketId,
+            name: parsed.name || 'Anonymous',
+          };
+        } catch {
+          // Use defaults
+        }
+      }
+
+      const authResponse = pusherServer.authorizeChannel(socketId, channelName, {
+        user_id: userData.id,
+        user_info: {
+          name: userData.name,
+        },
+      });
+
+      return NextResponse.json(authResponse);
+    }
+
+    // For private channels
+    const authResponse = pusherServer.authorizeChannel(socketId, channelName);
+    return NextResponse.json(authResponse);
   } catch (error) {
     console.error('Pusher auth error:', error);
     return NextResponse.json(
-      { error: 'Authentication failed' },
+      { error: 'Failed to authenticate' },
       { status: 500 }
     );
   }

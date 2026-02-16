@@ -1,14 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ClockIcon from './icons/ClockIcon';
+import { Clock, SquareIcon } from 'lucide-react';
 
 interface TimerProps {
   remainingSeconds: number;
   onTimeUp: () => void;
+  onFinishEarly?: () => void;
 }
 
-export default function Timer({ remainingSeconds, onTimeUp }: TimerProps) {
+export default function Timer({ remainingSeconds, onTimeUp, onFinishEarly }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(remainingSeconds);
 
   useEffect(() => {
@@ -48,12 +49,28 @@ export default function Timer({ remainingSeconds, onTimeUp }: TimerProps) {
         ? 'bg-yellow-100 border-4 border-yellow-500' 
         : 'bg-blue-100 border-4 border-blue-500'
     }`}>
-      <ClockIcon size={32} className={iconColor} />
+      <Clock className={`h-8 w-8 ${iconColor}`} />
       <div className="text-6xl font-bold tabular-nums">
         <span className={isCritical ? 'text-red-600' : isWarning ? 'text-yellow-600' : 'text-blue-600'}>
           {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
         </span>
       </div>
+      {onFinishEarly && (
+        <button
+          onClick={onFinishEarly}
+          className={`ml-2 p-2 rounded-xl transition-colors ${
+            isCritical
+              ? 'hover:bg-red-200 text-red-600'
+              : isWarning
+              ? 'hover:bg-yellow-200 text-yellow-600'
+              : 'hover:bg-blue-200 text-blue-600'
+          }`}
+          title="Finish Early"
+          aria-label="Finish Early"
+        >
+          <SquareIcon className="h-7 w-7" />
+        </button>
+      )}
     </div>
   );
 }

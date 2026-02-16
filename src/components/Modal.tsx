@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import CloseIcon from './icons/CloseIcon';
+import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface ModalProps {
   isOpen: boolean;
@@ -56,24 +57,24 @@ export default function Modal({ isOpen, onClose, title, children, showCloseButto
         className="absolute inset-0 bg-black/50 backdrop-blur-sm"
         onClick={showCloseButton ? onClose : undefined}
       />
-      <div className={`relative bg-white rounded-2xl shadow-2xl ${maxWidthClass} w-full animate-scale-in max-h-[90vh] flex flex-col`}>
+      <div className="relative bg-card rounded-xl shadow-2xl max-w-2xl w-full p-6 animate-scale-in max-h-[90vh] border">
         {showCloseButton && (
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 text-gray-700 hover:bg-gray-100 rounded-lg transition z-10"
+            className="absolute top-3 right-3 h-8 w-8"
             title="Close"
           >
-            <CloseIcon size={24} />
-          </button>
+            <X className="h-4 w-4" />
+          </Button>
         )}
         
-        <div className="px-8 pt-8 pb-4 border-b border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900 pr-8 truncate break-words">
-            {title}
-          </h2>
-        </div>
+        <h2 className="text-xl font-semibold text-foreground mb-4 pr-8 truncate break-words">
+          {title}
+        </h2>
         
-        <div className="flex-1 overflow-y-auto px-8 py-4 text-gray-700">
+        <div className="text-foreground">
           {children}
         </div>
 

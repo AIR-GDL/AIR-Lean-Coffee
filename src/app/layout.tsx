@@ -13,7 +13,7 @@ const openSans = Open_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "AIR Lean Coffee",
+  title: "Lean Coffee",
   description: "A collaborative lean coffee board for productive discussions",
   icons: {
     icon: "/icon.ico",
@@ -44,9 +44,24 @@ export default function RootLayout({
         <PusherProvider>
           <LoaderProvider>
             {children}
-            <Toaster position="bottom-center" richColors closeButton />
-          </LoaderProvider>
-        </PusherProvider>
+          </main>
+          <Toaster
+            position="top-right"
+            theme="light"
+            richColors
+            closeButton
+            toastOptions={{
+              classNames: {
+                toast: 'group toast group-[.toaster]:bg-white group-[.toaster]:text-gray-900 group-[.toaster]:border-gray-200 group-[.toaster]:shadow-lg',
+                description: 'group-[.toast]:text-gray-600',
+                actionButton: 'group-[.toast]:bg-blue-600 group-[.toast]:text-white',
+                cancelButton: 'group-[.toast]:bg-gray-200 group-[.toast]:text-gray-900',
+                success: 'group-[.toaster]:bg-green-50 group-[.toaster]:text-green-900 group-[.toaster]:border-green-200',
+                error: 'group-[.toaster]:bg-red-50 group-[.toaster]:text-red-900 group-[.toaster]:border-red-200',
+              },
+            }}
+          />
+        </LoaderProvider>
       </body>
     </html>
   );

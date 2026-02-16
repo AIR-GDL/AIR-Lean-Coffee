@@ -46,11 +46,11 @@ export default function LottieLoader({ message = 'Loading...', preloadedAnimatio
           <Lottie
             animationData={animationData}
             loop
-            className="w-48 h-48"
+            className="w-20 h-20"
           />
         )}
         {message && (
-          <p className="text-gray-800 text-2xl font-bold">{message}</p>
+          <p className="text-gray-800 text-lg font-bold">{message}</p>
         )}
       </div>
     </div>

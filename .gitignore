@@ -4,6 +4,8 @@
 /node_modules
 /.pnp
 .pnp.*
+package-lock.json
+bun.lockb
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
