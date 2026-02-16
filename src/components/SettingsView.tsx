@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import AppHeader from './AppHeader';
-import Footer from './Footer';
 import { User } from '@/types';
 import { toast } from '@/lib/toast';
 
@@ -291,8 +290,6 @@ export default function SettingsView({ onBack, user, onLogout }: SettingsViewPro
           </div>
         </div>
       </main>
-
-      <Footer />
     </div>
   );
 }
