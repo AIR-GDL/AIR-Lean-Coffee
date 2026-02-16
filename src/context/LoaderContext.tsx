@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useRef, useEffect } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
 import LottieLoader from '@/components/LottieLoader';
 
 interface LoaderContextType {
@@ -39,7 +39,7 @@ export function LoaderProvider({ children }: { children: ReactNode }) {
     preloadAnimation();
   }, []);
 
-  const showLoader = (msg: string = 'Loading...') => {
+  const showLoader = useCallback((msg: string = 'Loading...') => {
     // Clear any pending hide timeout
     if (hideTimeoutRef.current) {
       clearTimeout(hideTimeoutRef.current);
@@ -49,9 +49,9 @@ export function LoaderProvider({ children }: { children: ReactNode }) {
     setMessage(msg);
     setIsLoading(true);
     loadingStartTime.current = Date.now();
-  };
+  }, []);
 
-  const hideLoader = () => {
+  const hideLoader = useCallback(() => {
     if (!loadingStartTime.current) {
       setIsLoading(false);
       return;
@@ -72,7 +72,7 @@ export function LoaderProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       loadingStartTime.current = null;
     }
-  };
+  }, []);
 
   return (
     <LoaderContext.Provider value={{ showLoader, hideLoader, isLoading, animationData }}>
