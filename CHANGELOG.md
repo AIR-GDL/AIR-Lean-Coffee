@@ -2,6 +2,20 @@
 
 All notable changes to Lean Coffee will be documented in this file.
 
+## [2.0.1] - 16 Feb 2026
+
+### 🔧 Maintenance
+- **Version bump** to 2.0.1 — `package.json` version now stays in sync with releases
+  - `version.ts` reads from `package.json` dynamically, so the version displayed in the app (login footer) is always up to date
+
+### 🐛 Bug Fixes
+- **Fixed infinite re-render loop** that occurred after user login, causing the application to get stuck on "Loading board..." with "Maximum update depth exceeded" error
+  - Root cause: Unstable function references in `LoaderContext`, `PusherContext`, and `useLocalStorage` hooks were causing cascading infinite re-render loops
+  - Wrapped `showLoader`/`hideLoader` in `useCallback` in `LoaderContext.tsx`
+  - Replaced `channels` state with `ref` in `PusherContext.tsx` and wrapped `subscribe`/`unsubscribe` in `useCallback`
+  - Wrapped `setValue` in `useCallback` in `useLocalStorage.ts` using functional state updater pattern
+  - Memoized context value in `PusherContext` to prevent unnecessary consumer re-renders
+
 ## [2.0.0] - 9 Feb 2026
 
 ### 🎉 Major Release - Brand Renaming & UI Overhaul
