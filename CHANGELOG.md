@@ -59,6 +59,30 @@ All notable changes to Lean Coffee will be documented in this file.
 - Enhanced timer synchronization reliability
 - Better state management for real-time updates
 
+## [1.5.0] - 10 Nov 2025
+
+### Added
+- Real-time user presence with online/offline status
+- Admin-only controls for discussion management
+- Timer and voting system synchronization across all clients
+- Role-based access control (Admin/User)
+- Session management and automatic cleanup
+- Visual indicators for admin users
+
+### Improved
+- UI/UX with consistent styling and feedback
+- Real-time updates using Pusher
+- Error handling and user feedback
+- Performance optimizations
+- Mobile responsiveness
+
+### Technical
+- Implemented Pusher for real-time communication
+- Added role-based permissions system
+- Enhanced security with proper session management
+- Optimized state management for real-time updates
+- Improved code organization and maintainability
+
 ## [1.4.0] - 25 Oct 2025
 
 ### Added

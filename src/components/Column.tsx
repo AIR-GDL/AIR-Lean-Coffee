@@ -20,9 +20,10 @@ interface ColumnProps {
   onUpdate?: () => void;
   onDelete?: (topicId: string) => void;
   children?: React.ReactNode;
+  canManageDiscussions?: boolean;
 }
 
-export default function Column({ id, title, topics, user, onVote, onAddTopic, buttonLabel, buttonIcon, onUpdate, onDelete, children }: ColumnProps) {
+export default function Column({ id, title, topics, user, onVote, onAddTopic, buttonLabel, buttonIcon, onUpdate, onDelete, children, canManageDiscussions = false }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ 
     id,
     data: {

@@ -99,8 +99,10 @@ export default function Board({
   const [showConfirmDiscussModal, setShowConfirmDiscussModal] = useState(false);
   const [showVotingModal, setShowVotingModal] = useState(false);
   const [pendingTopicMove, setPendingTopicMove] = useState<{ topicId: string } | null>(null);
-  const [userVote, setUserVote] = useState<'finish' | 'continue' | null>(null);
+  const [userVote, setUserVote] = useState<'finish' | 'continue' | 'against' | 'neutral' | 'favor' | null>(null);
   const [showAddTimeSlider, setShowAddTimeSlider] = useState(false);
+  const [timerExpired, setTimerExpired] = useState(false);
+  const [voteCount, setVoteCount] = useState({ against: 0, neutral: 0, favor: 0 });
   const [additionalMinutes, setAdditionalMinutes] = useState(5);
   const [showAdminTimerChoice, setShowAdminTimerChoice] = useState(false);
   const [voteResults, setVoteResults] = useState<{ finish: string[]; continue: string[] }>({ finish: [], continue: [] });
@@ -114,6 +116,7 @@ export default function Board({
   
   // Track if timer has been restored to avoid infinite loops
   const timerRestoredRef = useRef(false);
+  const durationUpdateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Helper to broadcast Pusher events via API
   const broadcastEvent = useCallback(async (eventName: string, data: Record<string, unknown>) => {
@@ -269,19 +272,56 @@ export default function Board({
     })
   );
 
-  // Show loader when loading board
-  useEffect(() => {
-    if (isLoading) {
-      showLoader('Loading board...');
-    } else {
-      hideLoader();
-    }
-  }, [isLoading, showLoader, hideLoader]);
-
   // Update user in state when initialUser changes
   useEffect(() => {
     setUser(initialUser);
   }, [initialUser]);
+
+  const sendUserLeftEvent = useCallback((userId: string | undefined) => {
+    if (!userId) return;
+
+    try {
+      if (typeof navigator !== 'undefined' && 'sendBeacon' in navigator) {
+        const payload = JSON.stringify({
+          event: 'user-left',
+          data: { userId },
+          channel: `users-${roomId}`,
+        });
+        const blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon('/api/pusher/users', blob);
+      } else {
+        void triggerUserEvent('user-left', { userId }, roomId);
+      }
+    } catch (error) {
+      console.error('Failed to send user-left beacon:', error);
+      void triggerUserEvent('user-left', { userId }, roomId);
+    }
+  }, [roomId]);
+
+  // Trigger user-joined event when user loads and user-left when unmounts
+  useEffect(() => {
+    if (initialUser?._id) {
+      triggerUserEvent('user-joined', { user: initialUser, requestSync: true }, roomId);
+      triggerUserEvent('user-online', { user: initialUser }, roomId);
+
+      const handleBeforeUnload = () => {
+        sendUserLeftEvent(initialUser._id);
+      };
+
+      window.addEventListener('beforeunload', handleBeforeUnload);
+
+      // Cleanup: trigger user-left when component unmounts
+      return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        sendUserLeftEvent(initialUser._id);
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(initialUser._id);
+          return newSet;
+        });
+      };
+    }
+  }, [initialUser?._id, sendUserLeftEvent, roomId]);
 
   // Update current user when users list changes (vote returns)
   // Also check if user still exists (wasn't deleted by another session)
@@ -337,8 +377,11 @@ export default function Board({
     }
 
     const now = Date.now();
-    const totalMs = discussingTopic.discussionDurationMinutes * 60 * 1000;
-    const elapsedMs = now - discussingTopic.discussionStartTime;
+    // Convert ISO string to timestamp
+    const startTime = discussingTopic.discussionStartTime ? new Date(discussingTopic.discussionStartTime).getTime() : now;
+    const durationMinutes = Number(discussingTopic.discussionDurationMinutes);
+    const totalMs = durationMinutes * 60 * 1000;
+    const elapsedMs = now - startTime;
     const remainingMs = Math.max(0, totalMs - elapsedMs);
     const remainingSeconds = Math.max(0, Math.ceil(remainingMs / 1000));
 
@@ -348,7 +391,7 @@ export default function Board({
         durationMinutes: discussingTopic.discussionDurationMinutes || prev.durationMinutes,
         isRunning: false,
         isPaused: true,
-        startTime: discussingTopic.discussionStartTime || null,
+        startTime,
         remainingSeconds: 0,
         pausedRemainingSeconds: 0,
         currentTopicId: discussingTopic._id,
@@ -399,11 +442,14 @@ export default function Board({
 
     setIsSubmitting(true);
     try {
-      await createTopic({
+      const newTopic = await createTopic({
         title: newTopicTitle.trim(),
         description: newTopicDescription.trim(),
         author: user.name,
       });
+      
+      // Trigger Pusher event
+      await triggerTopicEvent('topic-created', { topic: newTopic });
       
       await mutate(); // Refresh topics
       setNewTopicTitle('');
@@ -414,7 +460,6 @@ export default function Board({
       alert('Failed to create topic. Please try again.');
     } finally {
       setIsSubmitting(false);
-      hideLoader();
     }
   };
 
@@ -428,7 +473,15 @@ export default function Board({
       // Update local user state with new votes remaining
       if ('user' in response) {
         setUser(response.user);
+        await triggerUserEvent('votes-updated', {
+          userId: user._id,
+          votesRemaining: response.user.votesRemaining,
+        });
       }
+
+      // Trigger Pusher event for topic update
+      const updatedTopic = await updateTopic(topicId, {});
+      await triggerTopicEvent('topic-updated', { topic: updatedTopic });
 
       await mutate(); // Refresh topics
     } catch (error) {
@@ -498,8 +551,13 @@ export default function Board({
     // Validate topic exists and is not already in target column
     if (!topic || statusToColumnId(topic.status) === targetColumnId) return;
 
+    if (!isAdmin && (targetColumnId === 'discussing' || targetColumnId === 'discussed')) {
+      return;
+    }
+
     // Only allow moving to "Discussing" from "Top Voted" section (to-discuss with votes)
     if (targetColumnId === 'discussing') {
+      if (!isAdmin) return;
       if (topic.status === 'to-discuss' && topic.votes > 0) {
         setPendingTopicMove({ topicId });
         setShowConfirmDiscussModal(true);
@@ -509,6 +567,7 @@ export default function Board({
 
     // Allow moving between "discussing" and "discussed" columns
     if (targetColumnId === 'discussed') {
+      if (!isAdmin) return;
       if (topic.status === 'discussing') {
         // If timer is running, show voting modal (finish early)
         if (timerSettings.isRunning && timerSettings.currentTopicId === topicId) {
@@ -557,17 +616,21 @@ export default function Board({
         totalTime += elapsedSeconds;
       }
 
-      await updateTopic(topicId, {
+      const updatedTopic = await updateTopic(topicId, {
         status: 'discussed',
         totalTimeDiscussed: totalTime,
+      });
+
+      // Trigger Pusher event
+      await triggerTopicEvent('topic-status-changed', {
+        topicId,
+        status: 'discussed',
       });
 
       await mutate(); // Refresh topics
     } catch (error) {
       console.error('Failed to move topic to discussed:', error);
       alert('Failed to move topic. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 
@@ -583,11 +646,12 @@ export default function Board({
 
   const handleDeleteParticipants = async () => {
     if (selectedParticipants.size === 0) return;
-
     try {
       // Delete each selected participant
       for (const userId of selectedParticipants) {
         await deleteUser(userId);
+        await triggerUserEvent('user-left', { userId }, roomId);
+        await triggerUserEvent('user-updated', { user: { _id: userId } });
       }
 
       // Refresh users list
@@ -600,8 +664,6 @@ export default function Board({
     } catch (error) {
       console.error('Failed to delete participants:', error);
       alert('Failed to delete participants. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 
@@ -609,20 +671,32 @@ export default function Board({
     if (!pendingTopicMove) return;
 
     const { topicId } = pendingTopicMove;
-    const now = Date.now();
+    const now = new Date();
+    const nowTimestamp = Date.now();
     
     try {
-      await updateTopic(topicId, {
+      const updatedTopic = await updateTopic(topicId, {
         status: 'discussing',
-        discussionStartTime: now,
+        discussionStartTime: now.toISOString(),
         discussionDurationMinutes: timerSettings.durationMinutes,
+      });
+
+      // Trigger Pusher events
+      await triggerTopicEvent('topic-status-changed', {
+        topicId,
+        status: 'discussing',
+      });
+      await triggerTimerEvent('timer-started', {
+        topicId,
+        startTime: nowTimestamp,
+        durationMinutes: timerSettings.durationMinutes,
       });
 
       // Start timer
       setTimerSettings({
         ...timerSettings,
         isRunning: true,
-        startTime: now,
+        startTime: nowTimestamp,
         remainingSeconds: timerSettings.durationMinutes * 60,
         currentTopicId: topicId,
       });
@@ -633,17 +707,14 @@ export default function Board({
     } catch (error) {
       console.error('Failed to update topic status:', error);
       alert('Failed to start discussion. Please try again.');
-    } finally {
-      hideLoader();
     }
   };
 
-  const handleTimerComplete = () => {
-    // Mark timer as paused at 0 seconds
-    setTimerSettings({
-      ...timerSettings,
-      isRunning: false,
-      isPaused: true,
+  const handleTimerComplete = useCallback(() => {
+    // Show voting modal but keep timer state for potential "continue"
+    // Store remaining seconds as 0 to indicate timer expired
+    setTimerSettings((prev) => ({
+      ...prev,
       pausedRemainingSeconds: 0,
     });
 
@@ -695,7 +766,15 @@ export default function Board({
     });
   };
 
-  const handleVoteSubmit = async (vote: 'finish' | 'continue') => {
+  // Sync online users when voting modal opens
+  useEffect(() => {
+    if (showVotingModal && timerExpired) {
+      // Request sync from other users to get accurate online count
+      triggerUserEvent('user-joined', { user, requestSync: true }, roomId);
+    }
+  }, [showVotingModal, timerExpired, user, roomId]);
+
+  const handleVoteSubmit = async (vote: 'finish' | 'continue' | 'against' | 'neutral' | 'favor') => {
     setUserVote(vote);
 
     // Broadcast this user's vote to all clients
@@ -781,11 +860,127 @@ export default function Board({
     });
   };
 
+  const handleDurationChange = useCallback((newDuration: number) => {
+    setTimerSettings(prev => ({
+      ...prev,
+      durationMinutes: newDuration,
+    }));
+
+    if (isAdmin) {
+      if (durationUpdateTimeoutRef.current) {
+        clearTimeout(durationUpdateTimeoutRef.current);
+      }
+
+      durationUpdateTimeoutRef.current = setTimeout(() => {
+        void triggerTimerEvent('duration-updated', {
+          durationMinutes: newDuration,
+        });
+      }, 300);
+    }
+  }, [isAdmin, setTimerSettings]);
+
+  useEffect(() => {
+    return () => {
+      if (durationUpdateTimeoutRef.current) {
+        clearTimeout(durationUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleAdminContinueDiscussion = async () => {
+    // Admin decides to continue - save votes and show add time slider
+    const currentTopicId = timerSettings.currentTopicId;
+    if (currentTopicId) {
+      try {
+        await updateTopic(currentTopicId, {
+          finalVotes: voteCount,
+        });
+      } catch (error) {
+        console.error('Failed to save votes:', error);
+      }
+    }
+    setShowAddTimeSlider(true);
+  };
+
+  const handleAdminFinishDiscussion = async () => {
+    // Admin decides to finish - save votes and move to discussed
+    const currentTopicId = timerSettings.currentTopicId;
+    if (currentTopicId && timerSettings.startTime) {
+      try {
+        const ds = Math.floor((Date.now() - timerSettings.startTime) / 1000);
+        const currentTopic = topics.find(t => t._id === currentTopicId);
+        const totalTime = (currentTopic?.totalTimeDiscussed || 0) + ds;
+
+        await updateTopic(currentTopicId, {
+          status: 'discussed',
+          totalTimeDiscussed: totalTime,
+          finalVotes: voteCount,
+        });
+
+        await triggerTopicEvent('topic-status-changed', {
+          topicId: currentTopicId,
+          status: 'discussed',
+        });
+        await triggerTimerEvent('timer-stopped', {
+          topicId: currentTopicId,
+        });
+
+        await mutate();
+        await mutateUsers();
+      } catch (error) {
+        console.error('Failed to finish discussion:', error);
+      }
+    }
+
+    setTimerSettings({
+      ...timerSettings,
+      isRunning: false,
+      startTime: null,
+      remainingSeconds: null,
+      currentTopicId: null,
+      isPaused: false,
+      pausedRemainingSeconds: null,
+    });
+
+    setShowVotingModal(false);
+    setUserVote(null);
+    setShowAddTimeSlider(false);
+    setTimerExpired(false);
+    setVoteCount({ against: 0, neutral: 0, favor: 0 });
+
+    setTimeout(() => {
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+      });
+    }, 100);
+  };
+
   const handleLogout = () => {
     onLogout();
   };
 
   const activeTopic = activeId ? topics.find(t => t._id === activeId) : null;
+
+  // Show loader when loading board
+  useEffect(() => {
+    if (isLoading) {
+      showLoader('Loading board...');
+    } else {
+      hideLoader();
+    }
+  }, [isLoading, showLoader, hideLoader]);
+
+  // Show settings view if requested
+  if (showSettingsView) {
+    return <SettingsView onBack={() => setShowSettingsView(false)} user={user} onLogout={onLogout} />;
+  }
+
+  // Don't render board UI until data is loaded
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">
@@ -844,6 +1039,7 @@ export default function Board({
               onAddTopic={() => setShowAddTopicModal(true)}
               onUpdate={() => mutate()}
               onDelete={handleDeleteTopic}
+              canManageDiscussions={isAdmin}
             />
 
             <Column
@@ -854,6 +1050,7 @@ export default function Board({
               onVote={handleVote}
               onUpdate={() => mutate()}
               onDelete={handleDeleteTopic}
+              canManageDiscussions={isAdmin}
             />
 
             <Column
@@ -864,6 +1061,7 @@ export default function Board({
               onVote={handleVote}
               onUpdate={() => mutate()}
               onDelete={handleDeleteTopic}
+              canManageDiscussions={isAdmin}
             />
           </div>
 

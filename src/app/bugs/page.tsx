@@ -85,6 +85,13 @@ export default function BugsPage() {
     fetchBugs();
   }, [router]);
 
+  // Subscribe to Pusher events for real-time updates
+  usePusherBugs({
+    onBugCreated: () => fetchBugs(),
+    onBugUpdated: () => fetchBugs(),
+    onBugDeleted: () => fetchBugs(),
+  });
+
   const fetchBugs = async () => {
     try {
       setIsLoading(true);
@@ -122,6 +129,9 @@ export default function BugsPage() {
 
       if (!response.ok) throw new Error('Failed to update bug');
 
+      // Trigger Pusher event
+      await triggerBugEvent('bug-updated', { bugId: editingBug._id, ...editForm });
+
       setIsEditModalOpen(false);
       setEditingBug(null);
       await fetchBugs();
@@ -145,6 +155,9 @@ export default function BugsPage() {
       });
 
       if (!response.ok) throw new Error('Failed to delete bug');
+
+      // Trigger Pusher event
+      await triggerBugEvent('bug-deleted', { bugId: deletingBugId });
 
       toast.success('Bug report deleted successfully');
       setIsDeleteModalOpen(false);
@@ -352,9 +365,10 @@ export default function BugsPage() {
             ))}
               </div>
             )}
+            </div>
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>

@@ -15,6 +15,7 @@ export default function HistoryPage() {
   const [history, setHistory] = useState<Topic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
 
   useEffect(() => {
     // Check authentication
@@ -27,10 +28,17 @@ export default function HistoryPage() {
     loadHistory();
   }, [router]);
 
+  // Subscribe to Pusher events for real-time updates
+  usePusherHistory({
+    onHistoryUpdated: () => loadHistory(),
+  });
+
   const loadHistory = async () => {
     try {
       const data = await fetchDiscussionHistory();
-      setHistory(data);
+      // Show only archived topics (completed discussions)
+      const filteredData = data.filter(topic => topic.archived === true);
+      setHistory(filteredData);
     } catch (error) {
       console.error('Failed to load history:', error);
     } finally {
@@ -145,7 +153,10 @@ export default function HistoryPage() {
             ))}
           </div>
         )}
-      </main>
+      </Modal>
+
+      {/* Footer */}
+      <Footer />
     </div>
   );
 }

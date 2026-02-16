@@ -10,9 +10,18 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   showCloseButton?: boolean;
+  footer?: React.ReactNode;
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }
 
-export default function Modal({ isOpen, onClose, title, children, showCloseButton = true }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, showCloseButton = true, footer, maxWidth = '2xl' }: ModalProps) {
+  const maxWidthClass = {
+    'sm': 'max-w-sm',
+    'md': 'max-w-md',
+    'lg': 'max-w-lg',
+    'xl': 'max-w-xl',
+    '2xl': 'max-w-2xl'
+  }[maxWidth];
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -68,6 +77,12 @@ export default function Modal({ isOpen, onClose, title, children, showCloseButto
         <div className="text-foreground">
           {children}
         </div>
+
+        {footer && (
+          <div className="border-t border-gray-200 bg-gray-50 px-8 py-4 rounded-b-2xl">
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { Topic, User } from '@/types';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { updateTopic } from '@/lib/api';
+import { triggerHistoryEvent } from '@/hooks/usePusherHistory';
 import ThumbUpIcon from './icons/ThumbUpIcon';
 import ThumbDownIcon from './icons/ThumbDownIcon';
 import ArchiveIcon from './icons/ArchiveIcon';
@@ -131,6 +132,10 @@ export default function TopicCard({ topic, user, onVote, canVote, isDraggable = 
     setIsArchiving(true);
     try {
       await updateTopic(topic._id, { archived: true });
+      
+      // Trigger Pusher event to update history in real-time
+      await triggerHistoryEvent('history-updated', { topicId: topic._id, archived: true });
+      
       setShowArchiveConfirm(false);
       if (onUpdate) onUpdate();
     } catch (error) {

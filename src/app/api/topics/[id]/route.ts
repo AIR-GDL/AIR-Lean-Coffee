@@ -125,11 +125,22 @@ export async function PUT(
       
       // Update discussionStartTime if provided (when changing to 'discussing')
       if (discussionStartTime !== undefined) {
-        topic.discussionStartTime = discussionStartTime;
+        // Handle both ISO string and Date formats
+        if (typeof discussionStartTime === 'string') {
+          topic.discussionStartTime = new Date(discussionStartTime);
+        } else if (typeof discussionStartTime === 'number') {
+          topic.discussionStartTime = new Date(discussionStartTime);
+        } else {
+          topic.discussionStartTime = discussionStartTime;
+        }
       }
       
       // Update discussionDurationMinutes if provided (when changing to 'discussing')
+      let durationChanged = false;
       if (discussionDurationMinutes !== undefined) {
+        if (topic.discussionDurationMinutes !== discussionDurationMinutes) {
+          durationChanged = true;
+        }
         topic.discussionDurationMinutes = discussionDurationMinutes;
       }
       
