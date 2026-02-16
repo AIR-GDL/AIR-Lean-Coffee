@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { usePusherBugs, triggerBugEvent } from '@/hooks/usePusherBugs';
 
 interface BugReport {
   _id: string;
@@ -368,7 +369,6 @@ export default function BugsPage() {
             </div>
           </div>
         </div>
-      </main>
 
       {/* Edit Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>

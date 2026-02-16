@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { usePusherHistory } from '@/hooks/usePusherHistory';
 
 export default function HistoryPage() {
   const router = useRouter();
@@ -153,10 +154,7 @@ export default function HistoryPage() {
             ))}
           </div>
         )}
-      </Modal>
-
-      {/* Footer */}
-      <Footer />
+      </main>
     </div>
   );
 }

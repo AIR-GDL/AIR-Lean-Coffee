@@ -40,6 +40,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { EVENTS } from '@/lib/pusher-client';
+import { triggerTopicEvent } from '@/hooks/usePusherTopics';
+import { triggerTimerEvent } from '@/hooks/usePusherTimer';
+import { triggerUserEvent } from '@/hooks/usePusherUsers';
+import SettingsView from './SettingsView';
 
 interface BoardProps {
   user: User;
@@ -107,7 +111,10 @@ export default function Board({
   const [showAdminTimerChoice, setShowAdminTimerChoice] = useState(false);
   const [voteResults, setVoteResults] = useState<{ finish: string[]; continue: string[] }>({ finish: [], continue: [] });
   const [isVotingActive, setIsVotingActive] = useState(false);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [showSettingsView, setShowSettingsView] = useState(false);
 
+  const roomId = 'global';
   const isAdmin = user.roles?.includes('admin');
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
@@ -716,7 +723,7 @@ export default function Board({
     setTimerSettings((prev) => ({
       ...prev,
       pausedRemainingSeconds: 0,
-    });
+    }));
 
     if (isAdmin) {
       // Admin sees choice: finish topic directly or start a voting round
@@ -727,7 +734,7 @@ export default function Board({
       setIsVotingActive(false);
       setUserVote(null);
     }
-  };
+  }, [isAdmin, setTimerSettings]);
 
   const handleAdminFinishTopic = async () => {
     const currentTopicId = timerSettings.currentTopicId;

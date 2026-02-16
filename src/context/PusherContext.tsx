@@ -1,11 +1,12 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
-import pusherClient from '@/lib/pusher-client';
+import { getPusherClient } from '@/lib/pusher-client';
+import type PusherClient from 'pusher-js';
 import type { Channel } from 'pusher-js';
 
 interface PusherContextType {
-  pusher: typeof pusherClient;
+  pusher: PusherClient | null;
   isConnected: boolean;
   subscribe: (channelName: string) => Channel | null;
   unsubscribe: (channelName: string) => void;
@@ -17,7 +18,11 @@ export function PusherProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [channels, setChannels] = useState<Map<string, Channel>>(new Map());
 
+  const pusherClient = getPusherClient();
+
   useEffect(() => {
+    if (!pusherClient) return;
+
     // Connect to Pusher
     pusherClient.connection.bind('connected', () => {
       setIsConnected(true);
@@ -31,9 +36,11 @@ export function PusherProvider({ children }: { children: React.ReactNode }) {
       pusherClient.connection.unbind('connected');
       pusherClient.connection.unbind('disconnected');
     };
-  }, []);
+  }, [pusherClient]);
 
   const subscribe = (channelName: string): Channel | null => {
+    if (!pusherClient) return null;
+
     if (channels.has(channelName)) {
       return channels.get(channelName) || null;
     }
@@ -44,6 +51,8 @@ export function PusherProvider({ children }: { children: React.ReactNode }) {
   };
 
   const unsubscribe = (channelName: string) => {
+    if (!pusherClient) return;
+
     if (channels.has(channelName)) {
       pusherClient.unsubscribe(channelName);
       setChannels((prev) => {

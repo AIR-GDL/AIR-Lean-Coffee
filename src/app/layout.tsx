@@ -44,7 +44,7 @@ export default function RootLayout({
         <PusherProvider>
           <LoaderProvider>
             {children}
-          </main>
+          </LoaderProvider>
           <Toaster
             position="top-right"
             theme="light"
@@ -61,7 +61,7 @@ export default function RootLayout({
               },
             }}
           />
-        </LoaderProvider>
+        </PusherProvider>
       </body>
     </html>
   );
