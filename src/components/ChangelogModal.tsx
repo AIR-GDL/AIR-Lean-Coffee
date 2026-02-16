@@ -82,14 +82,23 @@ export default function ChangelogModal({ isOpen, onClose }: ChangelogModalProps)
               <h3 className="text-lg font-bold text-gray-900">v{entry.version}</h3>
               <span className="text-sm text-gray-500">{formatDate(entry.date)}</span>
             </div>
-            <ul className="space-y-2">
-              {entry.changes.map((change, index) => (
-                <li key={`${entry.version}-${index}`} className="flex items-start gap-2 text-gray-700 break-words">
-                  <span className="text-blue-500 font-bold mt-1 flex-shrink-0">•</span>
-                  <span className="break-words">{change}</span>
-                </li>
+            <div className="space-y-3">
+              {entry.sections.map((section, sIdx) => (
+                <div key={`${entry.version}-s${sIdx}`}>
+                  {section.title && (
+                    <h4 className="text-sm font-semibold text-gray-800 mb-1">{section.title}</h4>
+                  )}
+                  <ul className="space-y-1">
+                    {section.items.map((item, iIdx) => (
+                      <li key={`${entry.version}-s${sIdx}-i${iIdx}`} className="flex items-start gap-2 text-gray-700 break-words">
+                        <span className="text-blue-500 font-bold mt-1 flex-shrink-0">•</span>
+                        <span className="break-words">{item.replace(/\*\*(.+?)\*\*/g, '$1')}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           </div>
         ))}
       </div>

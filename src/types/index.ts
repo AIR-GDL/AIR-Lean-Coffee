@@ -4,6 +4,7 @@ export interface User {
   name: string;
   email: string;
   votesRemaining: number;
+  roles: string[];
   createdAt: string;
 }
 

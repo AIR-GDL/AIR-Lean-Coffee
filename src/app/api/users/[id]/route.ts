@@ -1,6 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import User from '@/models/User';
+import pusherServer, { CHANNELS, EVENTS } from '@/lib/pusher-server';
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await connectDB();
+
+    const { id } = await params;
+    const body = await request.json();
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'User ID is required' },
+        { status: 400 }
+      );
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    if (body.roles !== undefined) {
+      user.roles = body.roles;
+    }
+
+    await user.save();
+    // Strip legacy isAdmin field
+    await User.updateOne({ _id: user._id }, { $unset: { isAdmin: '' } });
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.USER_UPDATED, {
+      user,
+    });
+
+    return NextResponse.json(user, { status: 200 });
+  } catch (error) {
+    console.error('Error in PATCH /api/users/[id]:', error);
+    return NextResponse.json(
+      { error: 'Failed to update user', details: error instanceof Error ? error.message : 'Unknown error' },
+      { status: 500 }
+    );
+  }
+}
 
 export async function DELETE(
   request: NextRequest,
@@ -27,6 +75,10 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.USER_DELETED, {
+      userId: id,
+    });
 
     return NextResponse.json(
       { message: 'User deleted successfully' },

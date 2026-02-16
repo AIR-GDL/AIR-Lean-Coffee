@@ -138,6 +138,22 @@ export async function fetchAllUsers(): Promise<User[]> {
   return users;
 }
 
+// Update user role
+export async function updateUserRole(userId: string, roles: string[]): Promise<User> {
+  const response = await fetch(`/api/users/${userId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ roles }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update user role');
+  }
+
+  return response.json();
+}
+
 // Delete user
 export async function deleteUser(userId: string): Promise<void> {
   const response = await fetch(`/api/users/${userId}`, {

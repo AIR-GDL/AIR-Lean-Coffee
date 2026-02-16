@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from '@/lib/mongodb';
 import Topic from '@/models/Topic';
+import pusherServer, { CHANNELS, EVENTS } from '@/lib/pusher-server';
 
 export async function GET() {
   try {
@@ -38,6 +39,10 @@ export async function POST(request: NextRequest) {
       author,
       votes: 0,
       status: 'to-discuss',
+    });
+
+    await pusherServer?.trigger(CHANNELS.LEAN_COFFEE, EVENTS.TOPIC_CREATED, {
+      topic,
     });
 
     return NextResponse.json(topic, { status: 201 });

@@ -4,6 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   votesRemaining: number;
+  roles: string[];
   createdAt: Date;
 }
 
@@ -23,9 +24,26 @@ const UserSchema = new Schema<IUser>({
     type: Number,
     default: 3,
   },
+  roles: {
+    type: [String],
+    default: ['user'],
+  },
   createdAt: {
     type: Date,
     default: Date.now,
+  },
+}, {
+  toJSON: {
+    transform(_doc, ret: Record<string, unknown>) {
+      delete ret.isAdmin;
+      return ret;
+    },
+  },
+  toObject: {
+    transform(_doc, ret: Record<string, unknown>) {
+      delete ret.isAdmin;
+      return ret;
+    },
   },
 });
 

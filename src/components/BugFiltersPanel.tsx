@@ -1,7 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import ChevronDownIcon from './icons/ChevronDownIcon';
+import { ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 
 interface BugFilters {
   severity: string[];
@@ -67,69 +71,68 @@ export default function BugFiltersPanel({ filters, onFiltersChange, bugCount }: 
   const isFiltered = filters.severity.length > 0 || filters.status.length > 0 || filters.searchQuery.length > 0;
 
   return (
-    <div className="w-64 bg-white rounded-lg shadow-md p-4 h-fit sticky top-4">
+    <div className="w-64 bg-card rounded-lg border shadow-sm p-4 h-fit sticky top-4">
       <div className="mb-4">
-        <h2 className="text-lg font-bold text-gray-900 mb-2">Filters</h2>
-        <p className="text-sm text-gray-600">Total bugs: {bugCount}</p>
+        <h2 className="text-lg font-bold text-foreground mb-2">Filters</h2>
+        <p className="text-sm text-muted-foreground">Total bugs: {bugCount}</p>
       </div>
 
       {/* Search */}
       <div className="mb-6">
-        <button
+        <Button
+          variant="ghost"
           onClick={() => toggleSection('search')}
-          className="w-full flex items-center justify-between mb-3 p-2 hover:bg-gray-50 rounded-lg transition"
+          className="w-full flex items-center justify-between mb-3 px-2"
         >
-          <span className="font-medium text-gray-700">Search</span>
-          <ChevronDownIcon
-            size={18}
-            className={`transition-transform ${expandedSections.search ? 'rotate-180' : ''}`}
+          <span className="font-medium">Search</span>
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${expandedSections.search ? 'rotate-180' : ''}`}
           />
-        </button>
+        </Button>
         {expandedSections.search && (
-          <input
+          <Input
             type="text"
             placeholder="Search by title or content..."
             value={filters.searchQuery}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            className="text-sm"
           />
         )}
       </div>
 
       {/* Severity Filter */}
       <div className="mb-6">
-        <button
+        <Button
+          variant="ghost"
           onClick={() => toggleSection('severity')}
-          className="w-full flex items-center justify-between mb-3 p-2 hover:bg-gray-50 rounded-lg transition"
+          className="w-full flex items-center justify-between mb-3 px-2"
         >
-          <span className="font-medium text-gray-700">Severity</span>
-          <ChevronDownIcon
-            size={18}
-            className={`transition-transform ${expandedSections.severity ? 'rotate-180' : ''}`}
+          <span className="font-medium">Severity</span>
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${expandedSections.severity ? 'rotate-180' : ''}`}
           />
-        </button>
+        </Button>
         {expandedSections.severity && (
-          <div className="space-y-2 ml-2">
+          <div className="space-y-3 ml-2">
             {['high', 'medium', 'low'].map((severity) => (
               <label key={severity} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={filters.severity.includes(severity)}
-                  onChange={() => handleSeverityChange(severity)}
-                  className="w-4 h-4 rounded border-gray-300"
+                  onCheckedChange={() => handleSeverityChange(severity)}
                 />
-                <span className="text-sm text-gray-700 capitalize">{severity}</span>
-                <span
-                  className={`ml-auto px-2 py-1 rounded text-xs font-medium ${
-                    severity === 'high'
-                      ? 'bg-red-100 text-red-800'
-                      : severity === 'medium'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-green-100 text-green-800'
+                <span className="text-sm text-foreground capitalize">{severity}</span>
+                <Badge
+                  variant={severity === 'high' ? 'destructive' : 'secondary'}
+                  className={`ml-auto ${
+                    severity === 'medium'
+                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100'
+                      : severity === 'low'
+                        ? 'bg-green-100 text-green-800 hover:bg-green-100'
+                        : ''
                   }`}
                 >
                   {severity === 'high' ? '🔴' : severity === 'medium' ? '🟡' : '🟢'}
-                </span>
+                </Badge>
               </label>
             ))}
           </div>
@@ -138,38 +141,37 @@ export default function BugFiltersPanel({ filters, onFiltersChange, bugCount }: 
 
       {/* Status Filter */}
       <div className="mb-6">
-        <button
+        <Button
+          variant="ghost"
           onClick={() => toggleSection('status')}
-          className="w-full flex items-center justify-between mb-3 p-2 hover:bg-gray-50 rounded-lg transition"
+          className="w-full flex items-center justify-between mb-3 px-2"
         >
-          <span className="font-medium text-gray-700">Status</span>
-          <ChevronDownIcon
-            size={18}
-            className={`transition-transform ${expandedSections.status ? 'rotate-180' : ''}`}
+          <span className="font-medium">Status</span>
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${expandedSections.status ? 'rotate-180' : ''}`}
           />
-        </button>
+        </Button>
         {expandedSections.status && (
-          <div className="space-y-2 ml-2">
+          <div className="space-y-3 ml-2">
             {['open', 'in-progress', 'resolved'].map((status) => (
               <label key={status} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={filters.status.includes(status)}
-                  onChange={() => handleStatusChange(status)}
-                  className="w-4 h-4 rounded border-gray-300"
+                  onCheckedChange={() => handleStatusChange(status)}
                 />
-                <span className="text-sm text-gray-700 capitalize">{status.replace('-', ' ')}</span>
-                <span
-                  className={`ml-auto px-2 py-1 rounded text-xs font-medium ${
+                <span className="text-sm text-foreground capitalize">{status.replace('-', ' ')}</span>
+                <Badge
+                  variant="secondary"
+                  className={`ml-auto ${
                     status === 'resolved'
-                      ? 'bg-green-100 text-green-800'
+                      ? 'bg-green-100 text-green-800 hover:bg-green-100'
                       : status === 'in-progress'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-blue-100 text-blue-800 hover:bg-blue-100'
+                        : ''
                   }`}
                 >
                   {status === 'resolved' ? '✓' : status === 'in-progress' ? '⟳' : '○'}
-                </span>
+                </Badge>
               </label>
             ))}
           </div>
@@ -178,12 +180,13 @@ export default function BugFiltersPanel({ filters, onFiltersChange, bugCount }: 
 
       {/* Clear Filters */}
       {isFiltered && (
-        <button
+        <Button
+          variant="outline"
           onClick={handleClearFilters}
-          className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+          className="w-full"
         >
           Clear Filters
-        </button>
+        </Button>
       )}
     </div>
   );
